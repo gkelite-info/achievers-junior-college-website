@@ -6,7 +6,7 @@ import { X } from "@phosphor-icons/react";
 
 // Top Accordion Highlights
 const accordionHighlights = [
-  { src: "/home-banner.png", alt: "Vast Green Campus" },
+  { src: "/home-banner.webp", alt: "Vast Green Campus" },
   { src: "/cultivate-skills.png", alt: "Hands-on Learning" },
   { src: "/export-mentorship.png", alt: "Expert Mentorship" },
   { src: "/visionary-approach.png", alt: "Visionary Approach" },

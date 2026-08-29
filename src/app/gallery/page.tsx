@@ -8,7 +8,7 @@ export default function GalleryPage() {
       <section className="relative w-full h-[400px] flex items-center justify-center overflow-hidden bg-[#111433]">
         <div className="absolute inset-0 z-0">
           <Image 
-            src="/home-banner.png" 
+            src="/home-banner.webp" 
             alt="Achievers Junior College Campus" 
             fill 
             className="object-cover opacity-30" 

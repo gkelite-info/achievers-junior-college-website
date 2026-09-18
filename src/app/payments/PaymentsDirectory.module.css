@@ -1,0 +1,25 @@
+.page { min-height: 70vh; background: #f2f5fa; padding: 48px 20px; color: #182336; }
+.directory { max-width: 1200px; margin: 0 auto; }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 28px; }
+.eyebrow { font-size: 12px; font-weight: 600; color: #0055cc; text-transform: uppercase; letter-spacing: 1px; }
+.header h1 { font-size: 32px; font-weight: 700; margin: 8px 0; }
+.header p:last-child { font-size: 14px; color: #63718a; }
+.count { flex-shrink: 0; background: #e3edff; border-radius: 20px; padding: 9px 15px; font-size: 13px; color: #0055cc; }
+.toolbar { margin-bottom: 20px; }
+.lookupButton { display: block; margin: 28px auto 20px; padding: 11px 18px; border: 0; border-radius: 6px; background: #0055cc; color: white; font-size: 13px; font-weight: 600; cursor: pointer; }
+.lookupButton:hover { background: #0043a3; }
+.toolbar label { display: block; font-size: 13px; margin-bottom: 8px; }
+.toolbar input { width: 100%; max-width: 480px; padding: 12px 15px; background: white; border: 1px solid #dce3ed; border-radius: 8px; font-size: 13px; }
+.tableScroll { overflow-x: auto; background: white; border: 1px solid #dce3ed; border-radius: 12px; box-shadow: 0 3px 12px #14243b08; }
+.tableScroll table { width: 100%; min-width: 960px; border-collapse: collapse; text-align: left; font-size: 13px; }
+.tableScroll th { background: #edf3fc; padding: 17px 15px; font-weight: 600; white-space: nowrap; }
+.tableScroll td { padding: 20px 15px; border-top: 1px solid #edf0f4; }
+.tableScroll tr:hover td { background: #f8faff; }
+.city { display: block; margin-top: 5px; color: #738096; font-size: 12px; }
+.pending { white-space: nowrap; background: #fff3da; color: #915b00; padding: 6px 10px; border-radius: 20px; font-size: 11px; }
+.tableScroll button { cursor: pointer; color: white; background: #0055cc; border: 0; padding: 8px 18px; border-radius: 6px; font-weight: 600; }
+.tableScroll button:hover { background: #0043a3; }
+.directory input:focus-visible, .directory button:focus-visible, .tableScroll:focus-visible { outline: 2px solid #0055cc; outline-offset: 3px; }
+.note, .empty { color: #738096; font-size: 12px; margin-top: 15px; }
+.empty { padding: 24px; text-align: center; }
+@media (max-width: 640px) { .page { padding: 30px 12px; } .header { align-items: flex-start; flex-direction: column; gap: 12px; } .header h1 { font-size: 26px; } }

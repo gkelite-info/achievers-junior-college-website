@@ -1,29 +1,47 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { List, X } from "@phosphor-icons/react";
 
 const navLinks = [
   { name: "Home", href: "/" },
-  { name: "About", href: "/#about" },
-  { name: "Services", href: "/#services" },
+  { name: "About", href: "/about" },
+  { name: "Services", href: "/services" },
   { name: "Gallery", href: "/gallery" },
-  { name: "Admissions", href: "/#admissions" },
-  { name: "Alumni", href: "/#alumni" },
-  { name: "Payments", href: "/#payments" },
-  { name: "Contact", href: "/#contact" },
+  { name: "Alumni", href: "/alumni" },
+  { name: "Payments", href: "/payments" },
+  { name: "Contact", href: "/contact" },
 ];
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Keep previously shared anchors working with the dedicated pages.
+  useEffect(() => {
+    const redirectLegacyPage = () => {
+      const hash = window.location.hash;
+      if (window.location.pathname === "/" && hash === "#payments") {
+        router.replace("/payments");
+        return;
+      }
+      if (window.location.pathname === "/" && (hash === "#about" || hash === "#services" || hash === "#alumni" || hash === "#contact")) {
+        router.replace(hash === "#about" ? "/about" : hash === "#alumni" ? "/alumni" : hash === "#contact" ? "/contact" : "/services");
+      }
+    };
+
+    redirectLegacyPage();
+    window.addEventListener("hashchange", redirectLegacyPage);
+    return () => window.removeEventListener("hashchange", redirectLegacyPage);
+  }, [pathname, router]);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-[#f7f9fb]/70 border-b border-white/20 shadow-sm backdrop-blur-[12px]">
+    <header className="fixed inset-x-0 top-0 z-50 h-[68px] w-full bg-[#f7f9fb] border-b border-white/20 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-[40px]">
-        <div className="flex justify-between items-center min-h-[67px] py-2">
+        <div className="flex h-[67px] justify-between items-center py-2">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center max-w-[80%] xl:max-w-none">
             <Link 
@@ -60,14 +78,14 @@ export default function Navbar() {
           </nav>
 
           {/* CTA Button (Desktop) */}
-          <div className="hidden xl:flex items-center">
+          {pathname !== "/apply" && <div className="hidden xl:flex items-center">
             <Link
-              href="#apply"
+              href="/apply"
               className="bg-[#FFA401] hover:bg-[#e69401] text-[#FFFFFF] text-[14px] tracking-[0.14px] font-normal px-[24px] py-[8px] rounded-[8px] transition-colors duration-200 shadow-md"
             >
               Apply Now
             </Link>
-          </div>
+          </div>}
 
           {/* Mobile menu button */}
           <div className="flex items-center xl:hidden">
@@ -107,15 +125,15 @@ export default function Navbar() {
               </Link>
             );
           })}
-          <div className="pt-4 pb-2 flex justify-center sm:justify-start px-3">
+          {pathname !== "/apply" && <div className="pt-4 pb-2 flex justify-center sm:justify-start px-3">
             <Link
-              href="#apply"
+              href="/apply"
               className="w-full sm:w-auto inline-block text-center bg-[#FFA401] hover:bg-[#e69401] text-[#FFFFFF] text-[14px] tracking-[0.14px] font-normal px-[32px] py-[10px] rounded-[8px] transition-colors shadow-md"
               onClick={() => setIsOpen(false)}
             >
               Apply Now
             </Link>
-          </div>
+          </div>}
         </div>
       )}
     </header>

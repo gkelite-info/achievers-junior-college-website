@@ -1,0 +1,98 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #edf0f4;
+  border-radius: 16px;
+  background: #ededed;
+  padding: 30px 28px 44px;
+  color: #151d2e;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 6%);
+}
+
+.heading {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -1.1px;
+}
+
+.description {
+  margin: 7px 0 0;
+  color: #63799a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.form { margin-top: 22px; display: flex; flex-direction: column; flex: 1; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.label {
+  display: block;
+  min-width: 0;
+  color: #34435b;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.required { color: #dc2626; }
+
+.field {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  margin-top: 5px;
+  border: 1px solid #e1e9f2;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 12px;
+  color: #34435b;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 400;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 4%);
+}
+
+.field::placeholder { color: #8b9fbc; opacity: 1; }
+.field:focus-visible { outline: 2px solid #0055cc; outline-offset: 1px; }
+.messageLabel { margin-top: 15px; flex: 1; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 0 3px; }
+.messageLabel textarea { flex: 1 0 100%; height: calc(100% - 20px); }
+.message { height: 164px; min-height: 164px; resize: vertical; }
+
+.submit {
+  display: flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 19px;
+  border: 0;
+  border-radius: 11px;
+  background: linear-gradient(100deg, #f5a000, #ff7011);
+  padding: 12px 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 3px 5px rgb(15 23 42 / 12%);
+  transition: filter 150ms;
+}
+
+.submit:hover { filter: brightness(.96); }
+.submit:focus-visible { outline: 2px solid #0055cc; outline-offset: 3px; }
+.status { margin-top: 12px; font-size: 12px; line-height: 1.6; }
+.status:empty { display: none; }
+
+@media (max-width: 479px) {
+  .panel { padding: 24px 20px 30px; }
+  .heading { font-size: 25px; }
+  .grid { grid-template-columns: minmax(0, 1fr); }
+}

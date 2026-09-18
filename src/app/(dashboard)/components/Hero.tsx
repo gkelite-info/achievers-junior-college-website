@@ -18,7 +18,7 @@ export default function Hero() {
           {/* Tagline */}
           <div className="inline-flex px-[16px] py-[3px] rounded-full bg-[#FFDDB8] w-fit">
             <span className="text-[#653E00] font-semibold text-[10px] sm:text-[12px] leading-[14px] tracking-[0.6px] uppercase">
-              Hyderabad's Premier Institution
+              Hyderabad&apos;s Premier Institution
             </span>
           </div>
 
@@ -38,7 +38,7 @@ export default function Hero() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-[16px] pt-[17px]">
             <Link
-              href="#apply"
+              href="/apply"
               className="px-[32px] py-[16px] bg-[#FFA401] hover:bg-[#e69401] text-[#081C35] text-[14px] tracking-[0.14px] font-bold rounded-[8px] text-center transition-colors shadow-lg flex items-center justify-center h-[51px]"
             >
               Apply Now

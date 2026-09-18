@@ -37,13 +37,13 @@ export default function Footer() {
             </h4>
             <ul className="flex flex-col gap-[16px]">
               <li className="pt-[6px] pb-[3px]">
-                <Link href="#about" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">About</Link>
+                <Link href="/about" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">About</Link>
               </li>
               <li className="pt-[6px] pb-[3px]">
-                <Link href="#services" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Services</Link>
+                <Link href="/services" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Services</Link>
               </li>
               <li className="pt-[6px] pb-[3px]">
-                <Link href="#payments" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Payments</Link>
+                <Link href="/payments" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Payments</Link>
               </li>
               <li className="pt-[6px] pb-[3px]">
                 <Link href="/gallery" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Gallery</Link>

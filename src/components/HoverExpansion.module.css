@@ -1,0 +1,55 @@
+.image, .card, .banner { cursor: pointer; }
+.image {
+  transition: transform 700ms ease-in-out, box-shadow 700ms ease-in-out;
+}
+.banner img { transition: transform 700ms ease-in-out; }
+
+.courses > .card:has(:focus-visible) {
+  border-color: #111630;
+  background-color: #111630;
+  color: white;
+}
+.courses > .card:has(:focus-visible) p { color: #CCD0DD; }
+.courses > .card:has(:focus-visible) a { color: white; }
+.courses > .card:has(:focus-visible) > div { background-color: rgb(255 255 255 / 10%); }
+
+@media (hover: hover) and (pointer: fine) {
+  .courses > .card:hover {
+    border-color: #111630;
+    background-color: #111630;
+    color: white;
+  }
+  .courses > .card:hover p { color: #CCD0DD; }
+  .courses > .card:hover a { color: white; }
+  .courses > .card:hover > div { background-color: rgb(255 255 255 / 10%); }
+  .image:hover {
+    transform: scale(1.035);
+    z-index: 1;
+    box-shadow: 0 12px 28px rgb(10 30 55 / 15%);
+  }
+  .banner:hover img { transform: scale(1.05); }
+}
+
+@media (min-width: 1024px) and (hover: hover) and (pointer: fine) {
+  .row {
+    display: flex;
+    align-items: stretch;
+  }
+  .row > .card {
+    flex: 1 1 0%;
+    width: 0;
+    min-width: 0;
+    transition: flex-grow 700ms ease-in-out, background-color 300ms, box-shadow 300ms;
+    overflow-wrap: anywhere;
+  }
+  .row > .card:hover, .row > .card:has(:focus-visible) { flex-grow: 1.8; }
+  .faculty > .card > span:first-child { height: 255px; aspect-ratio: auto; }
+  .courses > .card { min-height: 300px; cursor: default; }
+  .photos > .card { height: 360px; aspect-ratio: auto; }
+  .events > .card { height: 200px; aspect-ratio: auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image, .banner img, .row > .card { transition: none; }
+  .image:hover, .banner:hover img { transform: none; }
+}

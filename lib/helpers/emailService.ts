@@ -1,6 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 
 export function getCourseCode(course: string): string {
   if (!course) return "";
@@ -60,6 +59,7 @@ export async function sendApplicationEmail(email: string, name: string, applicat
   `;
 
   try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
     const { data, error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@gkeliteinfo.com>',
       to: email, 

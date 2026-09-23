@@ -76,7 +76,7 @@ export default function ServicesPage() {
             <h2 id="journey-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">Start Your Journey <span className="text-[#FF8117]">with Achievers</span></h2>
             <p className="mt-2 text-base leading-relaxed text-[#CCD0DD]">Explore our courses and take the first step towards a successful future.</p>
           </div>
-          <Link href="/apply" className="inline-flex shrink-0 items-center justify-center gap-3 self-start rounded-xl bg-[#FA8117] px-8 py-4 text-base font-semibold transition-colors hover:bg-[#DF6C0A] md:self-auto">Apply Now <ArrowRight size={20} aria-hidden="true" /></Link>
+          <Link href="?apply=true" className="inline-flex shrink-0 items-center justify-center gap-3 self-start rounded-xl bg-[#FA8117] px-8 py-4 text-base font-semibold transition-colors hover:bg-[#DF6C0A] md:self-auto">Apply Now <ArrowRight size={20} aria-hidden="true" /></Link>
         </div>
       </section>
     </div>

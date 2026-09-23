@@ -6,8 +6,6 @@ export const demoApplication: Record<string, string> = {
   address: "H.No. 1-89, Teachers Colony", city: "Kamareddy", state: "Telangana",
   pinCode: "503111", phone: "9000000000", email: "ramu.kumar@example.com",
   registrationFee: "500", profileImage: "sample-student-profile.png",
-  classIXSchool: "Achievers High School", classIXBoard: "State Board", classIXYear: "2024",
-  classIXPercentage: "80", classIXMedium: "English", classIXCertificate: "Class-IX-Certificate.pdf",
   classXSchool: "Achievers High School", classXBoard: "State Board", classXYear: "2025",
   classXPercentage: "90", classXMedium: "English", classXCertificate: "Class-X-Certificate.pdf",
 };

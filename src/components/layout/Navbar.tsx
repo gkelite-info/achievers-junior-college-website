@@ -80,7 +80,7 @@ export default function Navbar() {
           {/* CTA Button (Desktop) */}
           {pathname !== "/apply" && <div className="hidden xl:flex items-center">
             <Link
-              href="/apply"
+              href="?apply=true"
               className="bg-[#FFA401] hover:bg-[#e69401] text-[#FFFFFF] text-[14px] tracking-[0.14px] font-normal px-[24px] py-[8px] rounded-[8px] transition-colors duration-200 shadow-md"
             >
               Apply Now
@@ -127,7 +127,7 @@ export default function Navbar() {
           })}
           {pathname !== "/apply" && <div className="pt-4 pb-2 flex justify-center sm:justify-start px-3">
             <Link
-              href="/apply"
+              href="?apply=true"
               className="w-full sm:w-auto inline-block text-center bg-[#FFA401] hover:bg-[#e69401] text-[#FFFFFF] text-[14px] tracking-[0.14px] font-normal px-[32px] py-[10px] rounded-[8px] transition-colors shadow-md"
               onClick={() => setIsOpen(false)}
             >

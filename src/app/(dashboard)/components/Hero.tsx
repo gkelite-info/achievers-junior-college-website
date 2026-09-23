@@ -38,7 +38,7 @@ export default function Hero() {
           {/* CTAs */}
           <div className="flex flex-col sm:flex-row gap-[16px] pt-[17px]">
             <Link
-              href="/apply"
+              href="?apply=true"
               className="px-[32px] py-[16px] bg-[#FFA401] hover:bg-[#e69401] text-[#081C35] text-[14px] tracking-[0.14px] font-bold rounded-[8px] text-center transition-colors shadow-lg flex items-center justify-center h-[51px]"
             >
               Apply Now

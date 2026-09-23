@@ -9,7 +9,7 @@ export const applicants = [
   { firstName: "Sai", lastName: "Krishna", course: "MPC", city: "Siddipet" },
 ].map((person, index) => withDemoDefaults({
   ...person,
-  applicationId: `AJC-INTER-2026-${String(19 + index).padStart(5, "0")}`,
+  applicationId: `AJC-2026-${String(1 + index).padStart(4, "0")}`,
   email: `${person.firstName}.${person.lastName}@example.com`.toLowerCase(),
   phone: `900000000${index}`,
 }));

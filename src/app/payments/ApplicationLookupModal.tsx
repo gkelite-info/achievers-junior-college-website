@@ -1,18 +1,18 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { X } from "@phosphor-icons/react";
-import { findApplication } from "./applicationLookup";
+import { applicationToDetails, lookupApplication } from "@/lib/helpers/applicationsAPI";
 import styles from "./ApplicationLookupModal.module.css";
 
 type Props = {
-  applicants: Record<string, string>[];
   initialApplicationNumber: string;
   onClose: () => void;
   onMatch: (person: Record<string, string>) => void;
 };
 
-export default function ApplicationLookupModal({ applicants, initialApplicationNumber, onClose, onMatch }: Props) {
+export default function ApplicationLookupModal({ initialApplicationNumber, onClose, onMatch }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
   useEffect(() => {
     const element = dialog.current;
     function positionModal() {
@@ -30,40 +30,43 @@ export default function ApplicationLookupModal({ applicants, initialApplicationN
     return () => { window.removeEventListener("resize", positionModal); element?.close(); document.body.style.overflow = overflow; };
   }, []);
 
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return;
     const data = new FormData(event.currentTarget);
     const application = String(data.get("applicationNumber") || "");
     const mobile = String(data.get("mobileNumber") || "");
     const dateOfBirth = String(data.get("dateOfBirth") || "");
-    if (!application.trim() && !mobile.trim() && !dateOfBirth && applicants[0]) {
-      onMatch(applicants[0]);
+    if (!application.trim() || !mobile.trim() || !dateOfBirth) {
+      setError("Enter your application number, registered mobile number and date of birth.");
       return;
     }
-    if (!application.trim() && !mobile.trim()) {
-      setError("Enter an application number or mobile number.");
-      return;
-    }
-    const match = findApplication(applicants, application, mobile, dateOfBirth);
-    if (!match) {
-      setError("No application matches these details. Check the application or mobile number and date of birth.");
-      return;
-    }
-    onMatch(match);
+    setPending(true);
+    setError("");
+    try {
+      const match = await lookupApplication(application, mobile, dateOfBirth);
+      if (!match) {
+        setError("No application matches all three details. Check your application number, mobile number and date of birth.");
+        return;
+      }
+      onMatch(applicationToDetails(match));
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to load the application.");
+    } finally { setPending(false); }
   }
 
   return <dialog ref={dialog} className={styles.modal} aria-labelledby="lookup-title" aria-describedby="lookup-description" onCancel={(event) => { event.preventDefault(); onClose(); }}>
     <header className={styles.header}><h2 id="lookup-title">View Application</h2><button type="button" onClick={onClose} aria-label="Close application lookup"><X size={22} aria-hidden="true" /></button></header>
     <form className={styles.form} onSubmit={submit} noValidate onChange={() => setError("")}>
-      <p id="lookup-description">Enter your application number or mobile number and date of birth.</p>
+      <p id="lookup-description">Enter your application number, registered mobile number and date of birth.</p>
       <div className={styles.fields}>
         <label>Application Number<input name="applicationNumber" defaultValue={initialApplicationNumber} placeholder="Application#" autoComplete="off" /></label>
         <label>Mobile Number<input name="mobileNumber" type="tel" inputMode="tel" placeholder="Mobile#" autoComplete="tel" /></label>
         <label className={styles.date}>Date of Birth <span aria-hidden="true">*</span><input name="dateOfBirth" type="date" required autoComplete="bday" /></label>
       </div>
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <p className={styles.hint}>Leave all fields empty and Submit to preview sample details. Or use mobile 9000000000 and date of birth 18 June 2010.</p>
-      <div className={styles.actions}><button type="button" onClick={onClose}>Cancel</button><button type="submit">Submit</button></div>
+      <p className={styles.hint}>Use the details from your saved application.</p>
+      <div className={styles.actions}><button type="button" onClick={onClose}>Cancel</button><button type="submit" disabled={pending}>{pending ? "Loading..." : "Submit"}</button></div>
     </form>
   </dialog>;
 }

@@ -168,7 +168,7 @@ export default function AboutPage() {
         <div className="absolute inset-0 bg-black/65" />
         <div className="relative">
           <h2 id="apply-heading" className="max-w-[700px] text-3xl font-bold leading-tight sm:text-5xl">Ready to Begin Your<br className="hidden sm:block" /> Academic Journey?</h2>
-          <Link href="/apply" className="mt-6 inline-block rounded-full bg-[#FFA401] px-10 py-4 text-lg font-semibold text-white transition-colors hover:bg-[#E69401]">Apply Now</Link>
+          <Link href="?apply=true" className="mt-6 inline-block rounded-full bg-[#FFA401] px-10 py-4 text-lg font-semibold text-white transition-colors hover:bg-[#E69401]">Apply Now</Link>
         </div>
       </section>
     </div>

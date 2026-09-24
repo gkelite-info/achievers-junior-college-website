@@ -4,8 +4,8 @@ import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 
 const programs = [
   {
-    id: "mpc",
-    title: "MPC",
+    id: "mec",
+    title: "MEC",
     description: "Integrated IIT-JEE (Mains & Advanced) coaching with intermediate board curriculum focus.",
     icon: "/user-with-gears.svg",
     active: false,
@@ -30,7 +30,6 @@ export default function Programs() {
   return (
     <section className="bg-[#FFFFFF] pt-[17px] pb-[53px]">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-[35px]">
-        {/* Header Container */}
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-end mb-[64px] gap-[32px] xl:gap-[180px]">
           <div className="w-full xl:max-w-[650px] flex flex-col gap-[16px]">
             <span className="text-[#FFA401] font-bold text-[16px] leading-[24px] tracking-[1px] uppercase">
@@ -54,48 +53,43 @@ export default function Programs() {
             return (
               <div
                 key={program.id}
-                className={`rounded-[32px] p-[40px] flex flex-col gap-[16px] transition-transform duration-300 hover:-translate-y-2 ${
-                  program.active
-                    ? "bg-[#0E1436]"
-                    : "bg-[#EFF4FF] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
-                }`}
+                className={`rounded-[32px] p-[40px] flex flex-col gap-[16px] transition-transform duration-300 hover:-translate-y-2 ${program.active
+                  ? "bg-[#0E1436]"
+                  : "bg-[#EFF4FF] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
+                  }`}
               >
                 <div
-                  className={`w-[64px] h-[64px] rounded-full flex items-center justify-center ${
-                    program.active ? "bg-[#FFFFFF]" : "bg-[#081D36]"
-                  }`}
+                  className={`w-[64px] h-[64px] rounded-full flex items-center justify-center ${program.active ? "bg-[#FFFFFF]" : "bg-[#081D36]"
+                    }`}
                 >
-                  <Image 
-                    src={program.icon} 
-                    alt={`${program.title} icon`} 
-                    width={29} 
+                  <Image
+                    src={program.icon}
+                    alt={`${program.title} icon`}
+                    width={29}
                     height={29}
                     className="object-contain"
                   />
                 </div>
-                
+
                 <h3
-                  className={`text-[24px] font-semibold leading-[32px] mt-[16px] ${
-                    program.active ? "text-[#FFFFFF]" : "text-[#0B1C30]"
-                  }`}
+                  className={`text-[24px] font-semibold leading-[32px] mt-[16px] ${program.active ? "text-[#FFFFFF]" : "text-[#0B1C30]"
+                    }`}
                 >
                   {program.title}
                 </h3>
-                
+
                 <p
-                  className={`text-[16px] leading-[24px] font-normal min-h-[96px] ${
-                    program.active ? "text-[#FFFFFF] opacity-90" : "text-[#0B1C30] opacity-80"
-                  }`}
+                  className={`text-[16px] leading-[24px] font-normal min-h-[96px] ${program.active ? "text-[#FFFFFF] opacity-90" : "text-[#0B1C30] opacity-80"
+                    }`}
                 >
                   {program.description}
                 </p>
-                
+
                 <div className="pt-[15px] mt-auto">
                   <Link
                     href={`#${program.id}`}
-                    className={`inline-flex items-center text-[16px] font-semibold leading-[24px] group transition-opacity hover:opacity-80 ${
-                      program.active ? "text-[#EFF4FF]" : "text-[#0B1C30]"
-                    }`}
+                    className={`inline-flex items-center text-[16px] font-semibold leading-[24px] group transition-opacity hover:opacity-80 ${program.active ? "text-[#EFF4FF]" : "text-[#0B1C30]"
+                      }`}
                   >
                     Explore Program
                     <ArrowRight

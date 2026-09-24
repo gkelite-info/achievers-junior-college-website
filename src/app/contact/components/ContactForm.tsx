@@ -3,18 +3,34 @@
 import { useState, type FormEvent } from "react";
 import { ArrowRight } from "@phosphor-icons/react";
 import styles from "./ContactForm.module.css";
+import { sendContactEmail } from "../actions";
 
 const fieldClass = styles.field;
 
 export default function ContactForm() {
   const [status, setStatus] = useState("");
-  function submit(event: FormEvent<HTMLFormElement>) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const values = new FormData(event.currentTarget);
-    const subject = `${values.get("enquiry")} enquiry from ${values.get("name")}`;
-    const body = `Name: ${values.get("name")}\nEmail: ${values.get("email")}\nPhone: ${values.get("phone")}\n\n${values.get("message")}`;
-    window.location.href = `mailto:admissions@achieverscollege.edu.in?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setStatus("Your email draft is ready to open. Send it from your email app to complete your enquiry. If it did not open, email admissions@achieverscollege.edu.in directly.");
+    setIsSubmitting(true);
+    setStatus("Sending...");
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    
+    try {
+      const result = await sendContactEmail(formData);
+      if (result.success) {
+        setStatus("Your message has been sent successfully!");
+        form.reset();
+      } else {
+        setStatus(result.error || "Failed to send message. Please try again.");
+      }
+    } catch (error) {
+      setStatus("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
   return (
     <section aria-labelledby="message-heading" className={styles.panel}>
@@ -28,7 +44,9 @@ export default function ContactForm() {
           <label className={styles.label}>Select Enquiry <span className={styles.required}>*</span><select name="enquiry" required defaultValue="" className={fieldClass}><option value="" disabled>Choose an option</option><option>Admissions</option><option>Courses</option><option>Campus Visit</option><option>Alumni</option><option>Payments</option><option>General</option></select></label>
         </div>
         <label className={`${styles.label} ${styles.messageLabel}`}>Your Message <span className={styles.required}>*</span><textarea name="message" required maxLength={3000} rows={6} placeholder="Write your message here..." className={`${fieldClass} ${styles.message}`} /></label>
-        <button type="submit" className={styles.submit}>Send Message <ArrowRight size={18} aria-hidden="true" /></button>
+        <button type="submit" disabled={isSubmitting} className={styles.submit}>
+          {isSubmitting ? "Sending..." : "Send Message"} <ArrowRight size={18} aria-hidden="true" />
+        </button>
         <p id="email-draft-note" className="sr-only">Opens your email app with your message ready to send.</p>
         <p role="status" className={styles.status}>{status}</p>
       </form>

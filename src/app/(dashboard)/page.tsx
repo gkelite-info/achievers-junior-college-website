@@ -15,7 +15,7 @@ export default function Home() {
       <Testimonials />
       <StatsBar variant="dark" />
       <CampusLife />
-      <Contact />
+      {/* <Contact /> */}
     </>
   );
 }

@@ -77,18 +77,11 @@ export async function logAnalyticsEvent(event: AnalyticsEvent) {
     
     const result = await pool.query(query, values);
     return result.rows[0];
-<<<<<<< Updated upstream
-  } catch (error: any) {
-    // Only log the error in production or if explicitly debugging,
-    // to avoid spamming the local console if the DB isn't configured yet.
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     if (process.env.NODE_ENV === 'production' || process.env.DEBUG_ANALYTICS) {
-      console.error("Failed to log analytics event:", error);
+      console.error("Failed to log analytics event via pg.Pool:", msg);
     }
-    // Silent fail for analytics so we don't break main app flows
-=======
-  } catch (error) {
-    console.error("Failed to log analytics event via pg.Pool:", error);
->>>>>>> Stashed changes
     return null;
   }
 }

@@ -125,30 +125,9 @@ export async function GET() {
       globalAdmissionsOpen,
       courses,
     });
-<<<<<<< Updated upstream
-  } catch (error: any) {
-    // Provide a graceful fallback for local development if the database is not configured
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn("DB not connected. Returning mock admissions data for local dev.");
-      return NextResponse.json({
-        success: true,
-        globalAdmissionsOpen: true,
-        courses: [
-          { collegeBranchId: 1, courseName: "MPC", isAdmissionsOpen: true, admissionFee: 15000 },
-          { collegeBranchId: 2, courseName: "BiPC", isAdmissionsOpen: true, admissionFee: 15000 },
-          { collegeBranchId: 3, courseName: "MEC", isAdmissionsOpen: true, admissionFee: 12000 }
-        ],
-        _mocked: true
-      });
-    }
-
-    console.error("Error fetching admissions:", error);
-    return NextResponse.json({ success: false, error: error?.message || String(error) }, { status: 500 });
-=======
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Error dynamically fetching admissions from DB:", msg);
     return NextResponse.json({ success: false, error: msg }, { status: 500 });
->>>>>>> Stashed changes
   }
 }

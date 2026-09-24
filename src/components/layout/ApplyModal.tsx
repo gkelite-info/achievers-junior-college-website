@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -35,7 +35,6 @@ export default function ApplyModal() {
   if (!isOpen) return null;
 
   const handleClose = () => {
-    // Remove the ?apply=true from URL without refreshing
     const newParams = new URLSearchParams(searchParams.toString());
     newParams.delete("apply");
     router.replace(`${pathname}?${newParams.toString()}`, { scroll: false });
@@ -66,7 +65,7 @@ export default function ApplyModal() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0047A9]"></div>
             </div>
           )}
-          
+
           {isError && (
             <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-start gap-3">
               <WarningCircle size={20} className="mt-0.5 shrink-0" weight="fill" />
@@ -97,7 +96,7 @@ export default function ApplyModal() {
                           : "border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed"
                       }`}
                     >
-                      <span className={`text-[20px] font-bold mb-2 ${isOpen ? "text-[#081D36] group-hover:text-[#0047A9]" : "text-gray-400"}`}>
+                      <span className={`text-[20px] font-bold mb-2 text-center ${isOpen ? "text-[#081D36] group-hover:text-[#0047A9]" : "text-gray-400"}`}>
                         {course.courseName}
                       </span>
                       

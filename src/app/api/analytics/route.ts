@@ -24,17 +24,18 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    
+
     // Extract IP and user agent
     const forwardedFor = req.headers.get("x-forwarded-for");
     const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : (req.headers.get("x-real-ip") || "unknown");
     const userAgent = req.headers.get("user-agent") || "unknown";
-    
+
     // Validate required fields
     if (!body.visitorId || !body.eventType || !body.path) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
-    
+
+
     const event = {
       visitorId: body.visitorId,
       eventType: body.eventType,
@@ -46,9 +47,9 @@ export async function POST(req: NextRequest) {
       metadata: body.metadata,
       college: body.college || "Achievers Junior College",
     };
-    
+
     await logAnalyticsEvent(event);
-    
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error in analytics API:", error);

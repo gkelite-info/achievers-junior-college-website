@@ -1,4 +1,5 @@
-import { pool } from "@/lib/db";
+﻿import { pool } from "@/lib/db";
+import { createClient } from "@supabase/supabase-js";
 
 export type AnalyticsEvent = {
   visitorId: string;
@@ -8,11 +9,50 @@ export type AnalyticsEvent = {
   path: string;
   ipAddress?: string;
   userAgent?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   college?: string;
 };
 
+function getSupabase() {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
 export async function logAnalyticsEvent(event: AnalyticsEvent) {
+  const now = new Date().toISOString();
+
+  // 1. Try Supabase REST Client (HTTPS) first - works in serverless, Vercel, and across all networks
+  try {
+    const supabase = getSupabase();
+    if (supabase) {
+      const { data, error } = await supabase.from("application_analytics_logs").insert({
+        visitorId: event.visitorId,
+        eventType: event.eventType,
+        formType: event.formType || null,
+        applicationId: event.applicationId || null,
+        path: event.path,
+        ipAddress: event.ipAddress || null,
+        userAgent: event.userAgent || null,
+        metadata: event.metadata || null,
+        college: event.college || "Achievers Junior College",
+        createdAt: now,
+        updatedAt: now,
+      }).select("logId").single();
+
+      if (!error && data) {
+        return data;
+      }
+      if (error) {
+        console.warn("Supabase analytics insert notice:", error.message);
+      }
+    }
+  } catch (supabaseErr) {
+    console.warn("Supabase client analytics logging error:", supabaseErr);
+  }
+
+  // 2. Fallback to direct pg.Pool
   try {
     const query = `
       INSERT INTO public.application_analytics_logs (
@@ -37,13 +77,11 @@ export async function logAnalyticsEvent(event: AnalyticsEvent) {
     
     const result = await pool.query(query, values);
     return result.rows[0];
-  } catch (error: any) {
-    // Only log the error in production or if explicitly debugging,
-    // to avoid spamming the local console if the DB isn't configured yet.
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
     if (process.env.NODE_ENV === 'production' || process.env.DEBUG_ANALYTICS) {
-      console.error("Failed to log analytics event:", error);
+      console.error("Failed to log analytics event via pg.Pool:", msg);
     }
-    // Silent fail for analytics so we don't break main app flows
     return null;
   }
 }
@@ -55,13 +93,32 @@ export async function logAnalyticsEvent(event: AnalyticsEvent) {
  * - total form submissions
  */
 export async function getAnalyticsKpiCounts(college?: string) {
+  // 1. Try Supabase Client first
+  try {
+    const supabase = getSupabase();
+    if (supabase) {
+      let q = supabase.from("application_analytics_logs").select("visitorId, eventType").eq("is_deleted", false);
+      if (college) q = q.eq("college", college);
+      const { data, error } = await q;
+      if (!error && data) {
+        const uniqueVisitors = new Set(data.filter((r) => ["page_view", "visitor", "site_visit"].includes(r.eventType?.toLowerCase())).map((r) => r.visitorId)).size;
+        const admissionsOpened = new Set(data.filter((r) => ["admission_open", "form_open"].includes(r.eventType?.toLowerCase())).map((r) => r.visitorId)).size;
+        const formsSubmitted = data.filter((r) => ["form_submit", "submission"].includes(r.eventType?.toLowerCase())).length;
+        return { uniqueVisitors, admissionsOpened, formsSubmitted };
+      }
+    }
+  } catch (err) {
+    console.warn("Supabase KPI fetch error:", err);
+  }
+
+  // 2. Fallback to pg.Pool
   try {
     const collegeFilter = college ? `AND college = $1` : ``;
     const params = college ? [college] : [];
 
     const query = `
       SELECT 
-        COUNT(DISTINCT "visitorId") FILTER (WHERE "eventType" IN ('page_view', 'visitor')) as "uniqueVisitors",
+        COUNT(DISTINCT "visitorId") FILTER (WHERE "eventType" IN ('page_view', 'visitor', 'site_visit')) as "uniqueVisitors",
         COUNT(DISTINCT "visitorId") FILTER (WHERE "eventType" IN ('admission_open', 'form_open')) as "admissionsOpened",
         COUNT(*) FILTER (WHERE "eventType" IN ('form_submit', 'submission')) as "formsSubmitted"
       FROM public.application_analytics_logs
@@ -90,6 +147,20 @@ export async function getAnalyticsKpiCounts(college?: string) {
  * Helper to fetch raw recent analytics logs
  */
 export async function getRecentAnalyticsLogs(limit = 100, college?: string) {
+  // 1. Try Supabase Client first
+  try {
+    const supabase = getSupabase();
+    if (supabase) {
+      let q = supabase.from("application_analytics_logs").select("*").eq("is_deleted", false).order("createdAt", { ascending: false }).limit(limit);
+      if (college) q = q.eq("college", college);
+      const { data, error } = await q;
+      if (!error && data) return data;
+    }
+  } catch (err) {
+    console.warn("Supabase recent logs fetch error:", err);
+  }
+
+  // 2. Fallback to pg.Pool
   try {
     const collegeFilter = college ? `AND college = $2` : ``;
     const params = college ? [limit, college] : [limit];
@@ -109,4 +180,3 @@ export async function getRecentAnalyticsLogs(limit = 100, college?: string) {
     return [];
   }
 }
-

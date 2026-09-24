@@ -789,11 +789,9 @@ async function writeApplication(request: NextRequest, updating: boolean) {
     grantApplicationAccess(response, applicationNumber);
     return response;
   } catch (error) {
-    console.error("Application save failed:", error);
-    const message = process.env.NODE_ENV === "development" && error instanceof Error
-      ? `Application could not be saved: ${error.message}`
-      : "Application could not be saved. Check database connectivity, run the application setup SQL, and configure the application-documents bucket and server Storage credentials. Your form is still available to retry.";
-    return NextResponse.json({ error: message }, { status: 503 });
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error("Application save failed:", errorMsg, error);
+    return NextResponse.json({ error: `Application could not be saved: ${errorMsg}. Check database connectivity and Storage credentials.`, details: errorMsg }, { status: 503 });
   }
 }
 

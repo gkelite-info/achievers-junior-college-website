@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { getCourseCode } = await import("@/lib/helpers/emailService");
-    
+
     const emailPayloads = recipients.map((recipient: any) => {
       const { emailId, firstName, lastName, applicationNumber, course } = recipient;
-      
+
       const courseCode = getCourseCode(course);
       const courseDisplay = courseCode ? `${course} (${courseCode})` : course;
 
@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
       }
 
       return {
-        from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@gkeliteinfo.com>', // Since you have a paid account, we use a custom domain
+        from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@achieversjuniorcollege.in>', // Since you have a paid account, we use a custom domain
         to: emailId,
         subject: subject,
         html: emailContent,

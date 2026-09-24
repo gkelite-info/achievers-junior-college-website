@@ -4,6 +4,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { X, WarningCircle } from "@phosphor-icons/react";
 import { useAdmissions } from "@/lib/helpers/admissionsAPI";
+import { trackClientEvent } from "@/lib/helpers/analyticsClient";
 
 export default function ApplyModal() {
   const searchParams = useSearchParams();
@@ -18,6 +19,10 @@ export default function ApplyModal() {
     if (showModal) {
       setIsOpen(true);
       document.body.style.overflow = "hidden";
+      trackClientEvent("admission_open", {
+        path: `${pathname}?apply=true`,
+        formType: "modal_select_course"
+      });
     } else {
       setIsOpen(false);
       document.body.style.overflow = "unset";
@@ -25,7 +30,7 @@ export default function ApplyModal() {
     return () => {
       document.body.style.overflow = "unset";
     };
-  }, [showModal]);
+  }, [showModal, pathname]);
 
   if (!isOpen) return null;
 

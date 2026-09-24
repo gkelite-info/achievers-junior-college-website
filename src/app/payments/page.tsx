@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import PaymentsDirectory from "./PaymentsDirectory";
 
 export const metadata: Metadata = {
@@ -7,5 +8,10 @@ export const metadata: Metadata = {
 };
 
 export default function PaymentsPage() {
-  return <PaymentsDirectory />;
+  return (
+    <Suspense fallback={<div className="min-h-[400px] flex items-center justify-center text-slate-500 font-medium">Loading...</div>}>
+      <PaymentsDirectory />
+    </Suspense>
+  );
 }
+

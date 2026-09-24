@@ -59,30 +59,50 @@ export default function AboutPage() {
             </div>
           </div>
           <div className="md:pr-6">
-            <h1 id="journey-heading" className="text-3xl font-semibold leading-tight sm:text-[32px]">Our Journey &amp; Impact</h1>
-            <p className="mt-7 text-base leading-relaxed text-[#464555] sm:text-lg">Founded with a vision to redefine the bridge between secondary education and professional excellence, Achievers Junior College is committed to nurturing a premier cohort of scholars through a modern, future-focused curriculum.</p>
+            <h1 id="journey-heading" className="text-3xl font-semibold leading-tight sm:text-[32px]">About Us</h1>
+            <p className="mt-7 text-base leading-relaxed text-[#464555] sm:text-lg">
+              Founded in 2013, Achievers Junior College has established itself as one of the trusted institutions dedicated to providing quality Intermediate education in Telangana. Recognized by the Government of Telangana, the college has consistently focused on academic excellence, character building, skill development, and career readiness.
+            </p>
+            <p className="mt-4 text-base leading-relaxed text-[#464555] sm:text-lg">
+              For over a decade, we have successfully mentored more than 4,000 students, helping them secure admissions into prestigious universities and professional institutions while preparing them for meaningful careers and responsible citizenship.
+            </p>
+            <p className="mt-4 text-base leading-relaxed text-[#464555] sm:text-lg">
+              What truly distinguishes Achievers Junior College is our commitment to holistic development. Alongside academic excellence, we place equal emphasis on personality development, communication skills, leadership training, public speaking, critical thinking, creativity, emotional intelligence, teamwork, digital literacy, and career planning.
+            </p>
             <div className="mt-8 space-y-6">
               <div className="relative overflow-hidden rounded-[30px] bg-[#E7EEFF] px-7 py-6 before:absolute before:inset-y-4 before:left-0 before:w-[3px] before:bg-[#A36500]">
-                <h2 className="text-xl font-semibold text-[#925800] sm:text-2xl">Student-Centric Learning</h2>
-                <p className="mt-2 text-sm leading-snug text-[#303241]">Personalized mentoring that helps every student grow academically and personally.</p>
-              </div>
-              <div className="relative overflow-hidden rounded-[30px] bg-[#E7EEFF] px-7 py-6 before:absolute before:inset-y-4 before:left-0 before:w-[3px] before:bg-[#0055CC]">
-                <h2 className="text-xl font-semibold sm:text-2xl">Competitive Exam Excellence</h2>
-                <p className="mt-2 text-sm leading-snug text-[#303241]">Integrated NEET &amp; EAMCET coaching with Intermediate curriculum.</p>
+                <h2 className="text-xl font-semibold text-[#925800] sm:text-2xl">Learn. Grow. Achieve.</h2>
+                <p className="mt-2 text-sm leading-snug text-[#303241]">We continue to inspire young minds to dream bigger, work harder, and achieve excellence in every stage of life.</p>
               </div>
             </div>
           </div>
         </div>
-        <div className="mt-10 grid gap-8 md:grid-cols-2">
+        <div className="mt-10 grid gap-8 lg:grid-cols-3">
           {[
-            { title: "Our Vision", icon: Eye, color: "bg-[#FFA401]", text: "To be a global benchmark for excellence in education, empowering every student to become a confident leader and a lifelong learner in an ever-evolving world." },
-            { title: "Our Mission", icon: Flag, color: "bg-[#0055CC]", text: "To provide a holistic learning environment that combines rigorous academic standards with innovative pedagogy and character building to unlock students’ full potential." },
+            { 
+              title: "Our Vision", 
+              icon: Eye, 
+              color: "bg-[#FFA401]", 
+              text: "Our vision is to become one of the most respected and trusted junior colleges by creating an educational environment where academic excellence meets innovation, character, leadership, and lifelong learning. We envision empowering students with the knowledge, confidence, practical skills, and ethical values necessary to excel in higher education, competitive examinations, professional careers, entrepreneurship, and society. Our aspiration is to develop individuals who are not only successful professionals but also compassionate leaders, responsible citizens, and lifelong learners capable of making meaningful contributions to the world." 
+            },
+            { 
+              title: "Our Mission", 
+              icon: Flag, 
+              color: "bg-[#0055CC]", 
+              text: "At Achievers Junior College, our mission is to provide an inspiring and enriching educational experience that nurtures intellectual growth, personal development, and professional readiness. We are committed to delivering high-quality education through experienced faculty and innovative teaching methodologies. Building strong conceptual understanding that enables students to excel academically. Encouraging critical thinking, analytical reasoning, creativity, and problem-solving abilities. Developing communication skills, confidence, leadership qualities, and emotional intelligence." 
+            },
+            { 
+              title: "Our Philosophy", 
+              icon: Lightbulb, 
+              color: "bg-[#10B981]", 
+              text: "We believe education is the foundation upon which successful lives are built. Academic achievement alone is not sufficient in today's competitive world. Students must also develop confidence, adaptability, leadership, communication skills, emotional resilience, technological awareness, and strong moral values. Our educational philosophy focuses on developing the complete individual by balancing academics, personal growth, practical exposure, innovation, and character formation. Every student receives encouragement to explore their talents, overcome challenges, think independently, and become lifelong learners prepared for the future." 
+            },
           ].map(({ title, icon: Icon, color, text }) => (
-            <article key={title} className="relative overflow-hidden rounded-[24px] px-7 py-10 shadow-[0_3px_4px_rgba(0,0,0,0.28)] sm:px-12 sm:py-12">
+            <article key={title} className="relative overflow-hidden rounded-[24px] px-7 py-10 shadow-[0_3px_4px_rgba(0,0,0,0.28)] sm:px-10 sm:py-12">
               <div className={`absolute inset-x-0 top-0 h-1 ${color}`} />
               <div className="mb-6 flex size-16 items-center justify-center rounded-full bg-[#E5EDF7]"><Icon size={32} weight="bold" aria-hidden="true" /></div>
               <h2 className="text-2xl font-semibold text-[#191C1E]">{title}</h2>
-              <p className="mt-5 text-base leading-relaxed text-[#464555]">{text}</p>
+              <p className="mt-5 text-sm sm:text-base leading-relaxed text-[#464555]">{text}</p>
             </article>
           ))}
         </div>

@@ -5,11 +5,7 @@ export default function Footer() {
   return (
     <footer className="bg-[#111433] pt-[63px] pb-[64px]">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-[40px]">
-        
-        {/* Top Section */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-[40px] md:gap-[24px] mb-[60px]">
-          
-          {/* Column 1: Brand Info */}
           <div className="flex flex-col gap-[22.8px] w-full max-w-[384px]">
             <h3 className="font-sora font-extrabold text-[24px] leading-[34px] text-[#FFFFFF]">
               Achievers Junior College
@@ -30,7 +26,6 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Column 2: Quick Links */}
           <div className="flex flex-col gap-[24px] w-full max-w-[384px]">
             <h4 className="font-sora font-bold text-[24px] leading-[34px] text-[#FFFFFF]">
               Quick Links
@@ -51,7 +46,6 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Column 3: Newsletter */}
           <div className="flex flex-col gap-[22.8px] w-full max-w-[384px]">
             <h4 className="font-sora font-bold text-[24px] leading-[34px] text-[#FFFFFF]">
               Newsletter
@@ -78,10 +72,9 @@ export default function Footer() {
 
         </div>
 
-        {/* Copyright */}
         <div className="border-t border-[rgba(255,255,255,0.1)] pt-[24px] flex justify-center">
           <p className="font-sora font-normal text-[14px] text-[#E0E3E5] opacity-80">
-            © 2024 Achievers Junior College. All rights reserved.
+            © {new Date().getFullYear()} Achievers Junior College. All rights reserved.
           </p>
         </div>
       </div>

@@ -38,7 +38,38 @@ export default function AlumniPage() {
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-[1280px] gap-10 px-4 py-9 sm:px-8 sm:py-10 lg:grid-cols-[2.1fr_1fr]">
+      <section className="bg-white py-16 sm:py-20 border-b border-[#E1E9F2]">
+        <div className="mx-auto max-w-[1280px] px-4 sm:px-10 text-center">
+          <span className="text-[#FFA401] font-bold text-[16px] leading-[24px] tracking-[1px] uppercase block mb-2">
+            Our Pride
+          </span>
+          <h2 className="text-[28px] sm:text-[36px] font-semibold text-[#0B1C30] mb-6">
+            ALUMNI
+          </h2>
+          <p className="text-lg text-[#464555] max-w-[900px] mx-auto leading-relaxed mb-8">
+            Our alumni are the strongest ambassadors of Achievers Junior College.
+            Graduates have successfully pursued higher education and established rewarding careers in:
+          </p>
+          <div className="flex flex-wrap justify-center gap-3 sm:gap-4 max-w-[1000px] mx-auto mb-10">
+            {[
+              "Engineering", "Medicine", "Pharmacy", "Information Technology", 
+              "Business", "Chartered Accountancy", "Banking", "Government Services", 
+              "Entrepreneurship", "Research", "Education"
+            ].map((field) => (
+              <span key={field} className="px-5 py-2.5 bg-[#F2F6FC] text-[#0055CC] rounded-full font-medium shadow-[0px_2px_4px_rgba(0,0,0,0.02)]">
+                {field}
+              </span>
+            ))}
+          </div>
+          <p className="text-lg text-[#464555] max-w-[900px] mx-auto leading-relaxed">
+            Many alumni regularly return to mentor current students, share industry experiences, conduct career
+            guidance sessions, and inspire future generations. <br className="hidden sm:block" />
+            <span className="font-semibold text-[#191C1E] mt-4 inline-block">Their achievements reflect our commitment to nurturing excellence.</span>
+          </p>
+        </div>
+      </section>
+
+      <div className="mx-auto grid max-w-[1280px] gap-10 px-4 py-12 sm:px-10 sm:py-16 lg:grid-cols-[2.1fr_1fr]">
         <section aria-labelledby="events-heading">
           <div className="mb-6 border-b border-[#E1E9F2] pb-3">
             <h2 id="events-heading" className="text-2xl font-bold tracking-tight sm:text-[28px]">Alumni Events</h2>

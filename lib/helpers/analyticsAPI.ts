@@ -37,8 +37,12 @@ export async function logAnalyticsEvent(event: AnalyticsEvent) {
     
     const result = await pool.query(query, values);
     return result.rows[0];
-  } catch (error) {
-    console.error("Failed to log analytics event:", error);
+  } catch (error: any) {
+    // Only log the error in production or if explicitly debugging,
+    // to avoid spamming the local console if the DB isn't configured yet.
+    if (process.env.NODE_ENV === 'production' || process.env.DEBUG_ANALYTICS) {
+      console.error("Failed to log analytics event:", error);
+    }
     // Silent fail for analytics so we don't break main app flows
     return null;
   }

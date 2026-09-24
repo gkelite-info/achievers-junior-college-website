@@ -371,7 +371,7 @@ import type { PoolClient } from "pg";
 import { pool } from "@/lib/db";
 import type { ApplicationInputPayload, FullApplicationData } from "@/lib/helpers/applicationsAPI";
 import { validateApplication } from "@/app/apply/validation";
-import { sendApplicationEmail } from "@/lib/helpers/emailService";
+import { sendApplicationEmail, sendOTPEmail } from "@/lib/helpers/emailService";
 
 console.log("===== APPLICATIONS ROUTE FILE LOADED =====");
 
@@ -703,11 +703,23 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const url = new URL(request.url);
+  const action = url.searchParams.get("action") || request.nextUrl.searchParams.get("action");
+
   console.log("===== APPLICATIONS POST ROUTE HIT =====");
   console.log("Request URL:", request.url);
+  console.log("Parsed Action:", action);
 
-  if (request.nextUrl.searchParams.get("action") === "lookup") {
+  if (action === "lookup") {
     return lookupStoredApplication(request);
+  }
+
+  if (action === "request_otp") {
+    return requestApplicationOtp(request);
+  }
+
+  if (action === "verify_otp") {
+    return verifyApplicationOtp(request);
   }
 
   return writeApplication(request, false);
@@ -825,5 +837,89 @@ async function lookupStoredApplication(request: NextRequest) {
     return response;
   } catch {
     return NextResponse.json({ error: "Unable to look up the application. Please try again later." }, { status: 503 });
+  }
+}
+
+async function requestApplicationOtp(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const applicationNumber = typeof body?.applicationNumber === "string" ? body.applicationNumber.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim() : "";
+  
+  if (!applicationNumber || !email) {
+    return NextResponse.json({ error: "Enter your application number and registered email address." }, { status: 400 });
+  }
+  
+  try {
+    // Check if the application exists and matches the email
+    const result = await pool.query(
+      `SELECT "applicationNumber", "firstName", "lastName" FROM public.users 
+       WHERE "applicationNumber" = $1 AND "email" = $2 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`,
+      [applicationNumber, email],
+    );
+    
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: "No application matches these details. Check your application number and email." }, { status: 404 });
+    }
+    
+    const user = result.rows[0];
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
+    
+    // UPSERT OTP in the database
+    await pool.query(
+      `INSERT INTO public.application_otps ("applicationNumber", email, otp, "expiresAt", "createdAt") 
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT ("applicationNumber") 
+       DO UPDATE SET otp = EXCLUDED.otp, "expiresAt" = EXCLUDED."expiresAt", "createdAt" = NOW()`,
+      [applicationNumber, email, otp, expiresAt]
+    );
+    
+    // Send email
+    await sendOTPEmail(email, otp, `${user.firstName} ${user.lastName}`);
+    
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Error generating OTP:", err);
+    return NextResponse.json({ error: "Unable to generate OTP. Please try again later." }, { status: 503 });
+  }
+}
+
+async function verifyApplicationOtp(request: NextRequest) {
+  const body = await request.json().catch(() => null);
+  const applicationNumber = typeof body?.applicationNumber === "string" ? body.applicationNumber.trim() : "";
+  const email = typeof body?.email === "string" ? body.email.trim() : "";
+  const otp = typeof body?.otp === "string" ? body.otp.trim() : "";
+  
+  if (!applicationNumber || !email || !otp) {
+    return NextResponse.json({ error: "Application number, email, and OTP are required." }, { status: 400 });
+  }
+  
+  try {
+    // Check if OTP matches and hasn't expired
+    const result = await pool.query(
+      `SELECT * FROM public.application_otps 
+       WHERE "applicationNumber" = $1 AND "email" = $2 AND "otp" = $3 AND "expiresAt" > NOW() LIMIT 1`,
+      [applicationNumber, email, otp],
+    );
+    
+    if (!result.rows[0]) {
+      return NextResponse.json({ error: "Invalid or expired OTP. Please request a new one." }, { status: 401 });
+    }
+    
+    // Delete the OTP after successful verification
+    await pool.query(`DELETE FROM public.application_otps WHERE "applicationNumber" = $1`, [applicationNumber]);
+    
+    // Grant access and return application
+    const application = await getStoredApplication(applicationNumber);
+    if (!application) {
+      return NextResponse.json({ error: "Application could not be found." }, { status: 404 });
+    }
+    
+    const response = NextResponse.json({ application }, { headers: { "Cache-Control": "no-store" } });
+    grantApplicationAccess(response, applicationNumber);
+    return response;
+  } catch (err) {
+    console.error("Error verifying OTP:", err);
+    return NextResponse.json({ error: "Unable to verify OTP. Please try again later." }, { status: 503 });
   }
 }

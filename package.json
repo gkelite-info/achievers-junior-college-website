@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
+    "@stripe/stripe-js": "^9.17.0",
     "@supabase/supabase-js": "^2.116.0",
     "@tanstack/react-query": "^5.103.1",
     "next": "16.3.3",
@@ -19,7 +20,8 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-hot-toast": "^2.6.1",
-    "resend": "^6.28.1"
+    "resend": "^6.28.1",
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

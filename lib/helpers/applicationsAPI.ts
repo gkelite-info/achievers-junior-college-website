@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { trackClientEvent } from "@/lib/helpers/analyticsClient";
 
 export type UserRecord = {
   userId: number | string;
@@ -25,6 +26,7 @@ export type UserRecord = {
   profileImageRef?: string | null;
   registrationFee?: string | number;
   applicationStatus?: string;
+  paymentStatus?: string;
   submissionTime?: string | null;
   isActive?: boolean;
   is_deleted?: boolean;
@@ -214,6 +216,16 @@ export function useSubmitApplication() {
           applicationQueryKeys.byNumber(data.user.applicationNumber),
           data
         );
+        // Track the form submission event in analytics logs
+        trackClientEvent("form_submit", {
+          applicationId: typeof data.user.userId === "number" ? data.user.userId : undefined,
+          formType: data.user.course || "Standard Application",
+          metadata: {
+            applicationNumber: data.user.applicationNumber,
+            name: `${data.user.firstName} ${data.user.lastName}`,
+            email: data.user.email,
+          },
+        });
       }
     },
   });

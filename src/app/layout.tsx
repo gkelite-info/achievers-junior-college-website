@@ -5,6 +5,7 @@ import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import QueryProvider from "@/components/providers/QueryProvider";
 import ApplyModal from "@/components/layout/ApplyModal";
+import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { Suspense } from "react";
 import { Toaster } from "react-hot-toast";
 
@@ -73,6 +74,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Footer />
           <Suspense fallback={null}>
             <ApplyModal />
+            <AnalyticsTracker />
           </Suspense>
           <Toaster position="top-right" />
         </QueryProvider>

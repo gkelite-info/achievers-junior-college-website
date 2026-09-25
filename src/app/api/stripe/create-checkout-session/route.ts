@@ -11,12 +11,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing applicationNumber or amount" }, { status: 400 });
     }
 
-    // Retrieve user and check payment status
+    // Retrieve the applicant and derive payment state from the transaction ledger.
     const client = await pool.connect();
     let user;
     try {
       const result = await client.query(
-        `SELECT "firstName", "lastName", "paymentStatus" FROM public.users WHERE "applicationNumber" = $1 LIMIT 1`,
+        `SELECT u."firstName", u."lastName",
+                EXISTS (
+                  SELECT 1
+                  FROM public.application_transactions t
+                  WHERE t."applicationNumber" = u."applicationNumber"
+                    AND LOWER(t."status"::text) = 'success'
+                ) AS "isPaid"
+         FROM public.users u
+         WHERE u."applicationNumber" = $1
+         LIMIT 1`,
         [applicationNumber]
       );
       user = result.rows[0];
@@ -28,7 +37,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Application not found" }, { status: 404 });
     }
 
-    if (user.paymentStatus === "success") {
+    if (user.isPaid) {
       return NextResponse.json({ error: "Application fee is already paid" }, { status: 400 });
     }
 

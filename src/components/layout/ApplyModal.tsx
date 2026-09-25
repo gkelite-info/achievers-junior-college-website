@@ -19,10 +19,7 @@ export default function ApplyModal() {
     if (showModal) {
       setIsOpen(true);
       document.body.style.overflow = "hidden";
-      trackClientEvent("admission_open", {
-        path: `${pathname}?apply=true`,
-        formType: "modal_select_course"
-      });
+      
     } else {
       setIsOpen(false);
       document.body.style.overflow = "unset";

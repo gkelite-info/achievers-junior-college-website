@@ -43,15 +43,9 @@ export async function recordSessionPayment(session: Stripe.Checkout.Session) {
         gatewayTransactionId,
         amount,
         currency,
-        "success",
+        "Success",
         JSON.stringify(session),
       ]
-    );
-
-    // Step 3: Application Status Update
-    await client.query(
-      `UPDATE public.users SET "paymentStatus" = 'success' WHERE "applicationNumber" = $1`,
-      [applicationNumber]
     );
 
     // Fetch user details for the email receipt
@@ -63,7 +57,7 @@ export async function recordSessionPayment(session: Stripe.Checkout.Session) {
     await client.query("COMMIT");
     console.log(`Successfully processed payment for application ${applicationNumber} (Tx: ${gatewayTransactionId})`);
 
-    // Step 4: Send Payment Confirmation Email
+    // Step 3: Send Payment Confirmation Email
     if (userRes.rows[0]?.email) {
       const user = userRes.rows[0];
       const fullName = `${user.firstName || ""} ${user.lastName || ""}`.trim() || "Applicant";

@@ -141,11 +141,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to send some emails", details: errors }, { status: 500 });
     }
 
-    // Map template to database status
-    let dbStatus = "Pending Payment";
-    if (templateType === "congratulate") dbStatus = "Selected";
-    else if (templateType === "verification") dbStatus = "Verification";
-    else if (templateType === "regret") dbStatus = "Regret";
+    // Map template to database status (strictly "Pending" | "Verification" | "Selected" | "Regret")
+    let admissionStatus: "Pending" | "Verification" | "Selected" | "Regret" = "Pending";
+    if (templateType === "congratulate") admissionStatus = "Selected";
+    else if (templateType === "verification") admissionStatus = "Verification";
+    else if (templateType === "regret") admissionStatus = "Regret";
 
     // Update the applications in the DB (public.users table)
     const applicationIds = recipients.map((r: any) => r.applicationId || r.applicationNumber).filter(Boolean);
@@ -157,11 +157,11 @@ export async function POST(request: NextRequest) {
         const placeholders = applicationIds.map((_: any, index: number) => `$${index + 2}`).join(", ");
         const updateQuery = `
           UPDATE public.users 
-          SET "applicationStatus" = $1, "updatedAt" = NOW() 
+          SET "admissionStatus" = $1, "updatedAt" = NOW() 
           WHERE "applicationNumber" IN (${placeholders}) OR "userId"::text IN (${placeholders})
         `;
 
-        await client.query(updateQuery, [dbStatus, ...applicationIds]);
+        await client.query(updateQuery, [admissionStatus, ...applicationIds]);
       } catch (dbError) {
         console.error("Database update error:", dbError);
         return NextResponse.json({ error: "Emails sent but failed to update database status" }, { status: 500 });

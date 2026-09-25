@@ -86,6 +86,7 @@ function repository({ failEducation = false, failSecondUpload = false, failCommi
       if (sql.includes('pg_advisory_xact_lock')) return {};
       if (sql.startsWith('SELECT *, to_char')) return { rows: existing ? [existing.user] : [] };
       if (sql.startsWith('SELECT * FROM public.user_education')) return { rows: existing?.education ? [existing.education] : [] };
+      if (sql.includes('FROM public.application_transactions')) return { rows: [{ isPaid: false }] };
       if (sql.includes('information_schema.columns')) return { rows: [{ data_type: idType }] };
       if (sql.startsWith('INSERT INTO')) {
         const isUser = sql.includes('public."users"');

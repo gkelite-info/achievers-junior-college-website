@@ -26,7 +26,7 @@ export type UserRecord = {
   profileImageRef?: string | null;
   registrationFee?: string | number;
   applicationStatus?: string;
-  paymentStatus?: string;
+  admissionStatus?: "Pending" | "Verification" | "Selected" | "Regret";
   submissionTime?: string | null;
   isActive?: boolean;
   is_deleted?: boolean;
@@ -55,6 +55,7 @@ export type UserEducationRecord = {
 export type FullApplicationData = {
   user: UserRecord;
   education: UserEducationRecord | null;
+  paymentStatus?: "success" | "pending";
   attachments?: { profileImage?: string; classXCertificate?: string };
 };
 
@@ -251,6 +252,7 @@ export function applicationToDetails(application: FullApplicationData): Record<s
   for (const [key, value] of Object.entries(user)) {
     if (value !== null && value !== undefined) details[key] = String(value);
   }
+  details.paymentStatus = application.paymentStatus || "pending";
   return {
     ...details,
     applicationId: user.applicationNumber,

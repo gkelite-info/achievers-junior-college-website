@@ -24,6 +24,7 @@ export default function ApplicationSummary({
   backLabel = "Back to Edit",
 }: Props) {
   const [showPayment, setShowPayment] = useState(false);
+  const isPaid = details.paymentStatus?.toLowerCase() === "success";
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "instant" });
@@ -74,7 +75,9 @@ export default function ApplicationSummary({
       </button>
 
       <div className="p-3.5 mb-5 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-800 text-center text-xs sm:text-sm font-medium" role="status">
-        Your application details are ready for review. Submission is pending.
+        {isPaid
+          ? "Your application and registration fee payment have been received successfully. You can download your application details below."
+          : "Your application has been submitted successfully. Complete the registration fee payment to continue the admission process."}
       </div>
 
       <div className="overflow-hidden bg-white border border-slate-200 rounded-xl shadow-md">
@@ -194,12 +197,12 @@ export default function ApplicationSummary({
                 </div>
                 <span
                   className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                    details.paymentStatus === "success"
+                    isPaid
                       ? "bg-emerald-50 text-emerald-700 border border-emerald-300"
                       : "bg-amber-50 text-amber-700 border border-amber-300"
                   }`}
                 >
-                  {details.paymentStatus === "success" ? "✓ Paid" : "● Payment Pending"}
+                  {isPaid ? "✓ Paid" : "● Payment Pending"}
                 </span>
               </div>
               <dl className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
@@ -209,8 +212,8 @@ export default function ApplicationSummary({
                 </div>
                 <div className="flex flex-col gap-1 p-2.5 rounded-lg bg-white border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
                   <dt className="text-slate-500 font-medium text-[10.5px] uppercase tracking-wider">Payment Status</dt>
-                  <dd className={`${details.paymentStatus === "success" ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold"} text-xs flex items-center gap-1.5`}>
-                    {details.paymentStatus === "success" ? (
+                  <dd className={`${isPaid ? "text-emerald-600 font-bold" : "text-amber-600 font-semibold"} text-xs flex items-center gap-1.5`}>
+                    {isPaid ? (
                       <>
                         <CheckCircle size={15} weight="fill" className="text-emerald-500" />
                         <span>Paid</span>
@@ -280,22 +283,15 @@ export default function ApplicationSummary({
 
         {/* Footer Actions */}
         <footer className="border-t border-slate-200 p-5 sm:p-6 text-center bg-white flex flex-col items-center gap-3">
-          {details.paymentStatus !== "success" ? (
-            <button
-              type="button"
-              disabled={showPayment}
-              className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-[#10b981] hover:bg-[#059669] text-white text-sm font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
-              onClick={handlePayment}
-            >
-              <CreditCard size={18} weight="bold" />
-              {showPayment ? "Redirecting..." : "Proceed to Online Payment"}
-            </button>
-          ) : (
-            <div className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-[#10b981]/10 border border-[#10b981] text-[#10b981] text-sm font-bold">
-              <CreditCard size={18} weight="bold" />
-              Application Fee Paid Successfully
-            </div>
-          )}
+          <button
+            type="button"
+            disabled={isPaid || showPayment}
+            className="inline-flex items-center justify-center gap-2 px-8 py-3 rounded-lg bg-[#10b981] hover:bg-[#059669] text-white text-sm font-bold shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+            onClick={handlePayment}
+          >
+            <CreditCard size={18} weight="bold" />
+            {isPaid ? "Application Fee Paid Successfully" : showPayment ? "Redirecting..." : "Proceed to Online Payment"}
+          </button>
           <div className="flex flex-wrap justify-center gap-2.5">
             <button
               type="button"

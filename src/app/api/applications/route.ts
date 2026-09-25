@@ -215,6 +215,7 @@
 //       mobileNumber: payload.mobileNumber, email: payload.email, profileImageRef,
 //       registrationFee: existing?.user.registrationFee ?? 500,
 //       applicationStatus: existing?.user.applicationStatus || "Pending Payment",
+//       admissionStatus: existing?.user.admissionStatus || "Pending",
 //       submissionTime: existing?.user.submissionTime || null, isActive: true, is_deleted: false,
 //     }, existing?.user.userId);
 
@@ -539,7 +540,18 @@ async function readStoredApplication(client: PoolClient, applicationNumber: stri
   const education = await client.query(
     `SELECT * FROM public.user_education WHERE "userId" = $1 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`, [rows[0].userId],
   );
-  return { user: rows[0], education: education.rows[0] || null };
+  const payment = await client.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM public.application_transactions
+       WHERE "applicationNumber" = $1 AND LOWER("status"::text) = 'success'
+     ) AS "isPaid"`,
+    [applicationNumber],
+  );
+  return {
+    user: rows[0],
+    education: education.rows[0] || null,
+    paymentStatus: payment.rows[0]?.isPaid ? "success" : "pending",
+  };
 }
 
 async function getStoredApplication(applicationNumber: string) {
@@ -658,6 +670,7 @@ async function persistApplication(payload: ApplicationInputPayload, requestedApp
       mobileNumber: payload.mobileNumber, email: payload.email, profileImageRef,
       registrationFee: payload.registrationFee ? Number(payload.registrationFee) : (existing?.user.registrationFee ?? 500),
       applicationStatus: existing?.user.applicationStatus || "Pending Payment",
+      admissionStatus: existing?.user.admissionStatus || "Pending",
       submissionTime: existing?.user.submissionTime || null, isActive: true, is_deleted: false,
     }, existing?.user.userId);
 
@@ -893,15 +906,23 @@ async function verifyApplicationOtp(request: NextRequest) {
   }
   
   try {
-    // Check if OTP matches and hasn't expired
+    // Load the OTP first so invalid and expired codes produce accurate messages.
     const result = await pool.query(
-      `SELECT * FROM public.application_otps 
-       WHERE "applicationNumber" = $1 AND "email" = $2 AND "otp" = $3 AND "expiresAt" > NOW() LIMIT 1`,
-      [applicationNumber, email, otp],
+      `SELECT otp, ("expiresAt" <= NOW()) AS "isExpired"
+       FROM public.application_otps
+       WHERE "applicationNumber" = $1 AND "email" = $2
+       LIMIT 1`,
+      [applicationNumber, email],
     );
     
     if (!result.rows[0]) {
-      return NextResponse.json({ error: "Invalid or expired OTP. Please request a new one." }, { status: 401 });
+      return NextResponse.json({ error: "Please request a new OTP to continue." }, { status: 401 });
+    }
+    if (result.rows[0].isExpired) {
+      return NextResponse.json({ error: "OTP has expired. Please request a new OTP." }, { status: 401 });
+    }
+    if (result.rows[0].otp !== otp) {
+      return NextResponse.json({ error: "OTP has expired or is no longer valid. Please request a new OTP." }, { status: 401 });
     }
     
     // Delete the OTP after successful verification

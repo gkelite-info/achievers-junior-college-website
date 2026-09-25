@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
         fullApplication = {
           user,
           education: eduRes.rows[0] || null,
+          paymentStatus: isPaid ? "success" : "pending",
         };
       }
     } finally {

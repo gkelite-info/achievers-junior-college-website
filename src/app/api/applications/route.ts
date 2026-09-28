@@ -505,10 +505,35 @@ async function validateApplicationFile(file: File, kind: "profileImage" | "class
 async function uploadApplicationFile(file: File, applicationNumber: string, kind: "profileImage" | "classXCertificate") {
   await validateApplicationFile(file, kind);
   const path = `${applicationNumber}/${kind}-${crypto.randomUUID()}.${kind === "profileImage" ? "jpg" : "pdf"}`;
-  const { error } = await getSupabaseServer().storage.from(APPLICATION_BUCKET).upload(path, file, {
-    contentType: kind === "profileImage" ? "image/jpeg" : "application/pdf", upsert: false,
-  });
-  if (error) throw new Error(`Could not upload ${kind === "profileImage" ? "profile image" : "certificate"}. Check the application-documents bucket and server Storage configuration.`);
+  const { error } = await getSupabaseServer()
+    .storage
+    .from(APPLICATION_BUCKET)
+    .upload(path, file, {
+      contentType:
+        kind === "profileImage" ? "image/jpeg" : "application/pdf",
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("Supabase Storage upload failed:", {
+      name: error.name,
+      message: error.message,
+      status: "status" in error ? error.status : undefined,
+      statusCode: "statusCode" in error ? error.statusCode : undefined,
+      bucket: APPLICATION_BUCKET,
+      fileType: file.type,
+      fileSize: file.size,
+    });
+
+    throw new Error(
+      `Storage upload failed: ${error.message}${
+        "statusCode" in error && error.statusCode
+          ? ` (${error.statusCode})`
+          : ""
+      }`,
+    );
+  }
+
   return path;
 }
 
@@ -534,7 +559,7 @@ async function withApplicationAttachments(application: FullApplicationData): Pro
 async function readStoredApplication(client: PoolClient, applicationNumber: string): Promise<FullApplicationData | null> {
   const { rows } = await client.query(
     `SELECT *, to_char("dateOfBirth", 'YYYY-MM-DD') AS "dateOfBirth" FROM public.users
-     WHERE "applicationNumber" = $1 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`, [applicationNumber],
+   WHERE "applicationNumber" = $1 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`, [applicationNumber],
   );
   if (!rows[0]) return null;
   const education = await client.query(
@@ -542,9 +567,9 @@ async function readStoredApplication(client: PoolClient, applicationNumber: stri
   );
   const payment = await client.query(
     `SELECT EXISTS (
-       SELECT 1 FROM public.application_transactions
-       WHERE "applicationNumber" = $1 AND LOWER("status"::text) = 'success'
-     ) AS "isPaid"`,
+     SELECT 1 FROM public.application_transactions
+     WHERE "applicationNumber" = $1 AND LOWER("status"::text) = 'success'
+   ) AS "isPaid"`,
     [applicationNumber],
   );
   return {
@@ -570,8 +595,8 @@ async function deleteStoredApplication(applicationNumber: string): Promise<boole
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [applicationNumber]);
     const result = await client.query(
       `UPDATE public.users SET is_deleted = true, "isActive" = false,
-       "deletedAt" = COALESCE("deletedAt", NOW()), "updatedAt" = NOW()
-       WHERE "applicationNumber" = $1 RETURNING "userId"`, [applicationNumber],
+     "deletedAt" = COALESCE("deletedAt", NOW()), "updatedAt" = NOW()
+     WHERE "applicationNumber" = $1 RETURNING "userId"`, [applicationNumber],
     );
     if (!result.rows[0]) {
       await client.query("ROLLBACK");
@@ -579,8 +604,8 @@ async function deleteStoredApplication(applicationNumber: string): Promise<boole
     }
     await client.query(
       `UPDATE public.user_education SET is_deleted = true, "isActive" = false,
-       "deletedAt" = COALESCE("deletedAt", NOW()), "updatedAt" = NOW()
-       WHERE "userId" = $1`, [result.rows[0].userId],
+     "deletedAt" = COALESCE("deletedAt", NOW()), "updatedAt" = NOW()
+     WHERE "userId" = $1`, [result.rows[0].userId],
     );
     await client.query("COMMIT");
     return true;
@@ -597,7 +622,7 @@ async function writeRecord(client: PoolClient, table: string, primaryKey: string
   if (existingId !== undefined) {
     return (await client.query(
       `UPDATE public."${table}" SET ${keys.map((key, i) => `"${key}" = $${i + 1}`).join(", ")}, "updatedAt" = NOW()
-       WHERE "${primaryKey}" = $${values.length + 1} RETURNING *`, [...values, existingId],
+     WHERE "${primaryKey}" = $${values.length + 1} RETURNING *`, [...values, existingId],
     )).rows[0];
   }
   // Supplied Sequelize models use identity integers. The older deployed tables use UUIDs.
@@ -610,7 +635,7 @@ async function writeRecord(client: PoolClient, table: string, primaryKey: string
   }
   return (await client.query(
     `INSERT INTO public."${table}" (${keys.map((key) => `"${key}"`).join(", ")}, "createdAt", "updatedAt")
-     VALUES (${values.map((_, i) => `$${i + 1}`).join(", ")}, NOW(), NOW()) RETURNING *`, values,
+   VALUES (${values.map((_, i) => `$${i + 1}`).join(", ")}, NOW(), NOW()) RETURNING *`, values,
   )).rows[0];
 }
 
@@ -838,7 +863,7 @@ async function lookupStoredApplication(request: NextRequest) {
   try {
     const result = await pool.query(
       `SELECT "applicationNumber" FROM public.users WHERE "applicationNumber" = $1 AND "mobileNumber" = $2
-       AND "dateOfBirth" = $3 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`,
+     AND "dateOfBirth" = $3 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`,
       [applicationNumber, mobileNumber, dateOfBirth],
     );
     if (!result.rows[0]) return NextResponse.json({ application: null }, { status: 404 });
@@ -855,39 +880,39 @@ async function requestApplicationOtp(request: NextRequest) {
   const body = await request.json().catch(() => null);
   const applicationNumber = typeof body?.applicationNumber === "string" ? body.applicationNumber.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim() : "";
-  
+
   if (!applicationNumber || !email) {
     return NextResponse.json({ error: "Enter your application number and registered email address." }, { status: 400 });
   }
-  
+
   try {
     // Check if the application exists and matches the email
     const result = await pool.query(
       `SELECT "applicationNumber", "firstName", "lastName" FROM public.users 
-       WHERE "applicationNumber" = $1 AND "email" = $2 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`,
+     WHERE "applicationNumber" = $1 AND "email" = $2 AND is_deleted = false AND "deletedAt" IS NULL LIMIT 1`,
       [applicationNumber, email],
     );
-    
+
     if (!result.rows[0]) {
       return NextResponse.json({ error: "No application matches these details. Check your application number and email." }, { status: 404 });
     }
-    
+
     const user = result.rows[0];
     const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes from now
-    
+
     // UPSERT OTP in the database
     await pool.query(
       `INSERT INTO public.application_otps ("applicationNumber", email, otp, "expiresAt", "createdAt") 
-       VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT ("applicationNumber") 
-       DO UPDATE SET otp = EXCLUDED.otp, "expiresAt" = EXCLUDED."expiresAt", "createdAt" = NOW()`,
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT ("applicationNumber")
+     DO UPDATE SET otp = EXCLUDED.otp, "expiresAt" = EXCLUDED."expiresAt", "createdAt" = NOW()`,
       [applicationNumber, email, otp, expiresAt]
     );
-    
+
     // Send email
     await sendOTPEmail(email, otp, `${user.firstName} ${user.lastName}`);
-    
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Error generating OTP:", err);
@@ -900,21 +925,21 @@ async function verifyApplicationOtp(request: NextRequest) {
   const applicationNumber = typeof body?.applicationNumber === "string" ? body.applicationNumber.trim() : "";
   const email = typeof body?.email === "string" ? body.email.trim() : "";
   const otp = typeof body?.otp === "string" ? body.otp.trim() : "";
-  
+
   if (!applicationNumber || !email || !otp) {
     return NextResponse.json({ error: "Application number, email, and OTP are required." }, { status: 400 });
   }
-  
+
   try {
     // Load the OTP first so invalid and expired codes produce accurate messages.
     const result = await pool.query(
       `SELECT otp, ("expiresAt" <= NOW()) AS "isExpired"
-       FROM public.application_otps
-       WHERE "applicationNumber" = $1 AND "email" = $2
-       LIMIT 1`,
+     FROM public.application_otps
+     WHERE "applicationNumber" = $1 AND "email" = $2
+     LIMIT 1`,
       [applicationNumber, email],
     );
-    
+
     if (!result.rows[0]) {
       return NextResponse.json({ error: "Please request a new OTP to continue." }, { status: 401 });
     }
@@ -924,16 +949,16 @@ async function verifyApplicationOtp(request: NextRequest) {
     if (result.rows[0].otp !== otp) {
       return NextResponse.json({ error: "OTP has expired or is no longer valid. Please request a new OTP." }, { status: 401 });
     }
-    
+
     // Delete the OTP after successful verification
     await pool.query(`DELETE FROM public.application_otps WHERE "applicationNumber" = $1`, [applicationNumber]);
-    
+
     // Grant access and return application
     const application = await getStoredApplication(applicationNumber);
     if (!application) {
       return NextResponse.json({ error: "Application could not be found." }, { status: 404 });
     }
-    
+
     const response = NextResponse.json({ application }, { headers: { "Cache-Control": "no-store" } });
     grantApplicationAccess(response, applicationNumber);
     return response;

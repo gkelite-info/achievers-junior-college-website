@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./PaymentsDirectory.module.css";
 import ApplicationLookupModal from "./ApplicationLookupModal";
 import { toast } from "react-hot-toast";
-import { applicationToDetails } from "@/lib/helpers/applicationsAPI";
+import { applicationToDetails, getApplication } from "@/lib/helpers/applicationsAPI";
 import { SpinnerGap } from "@phosphor-icons/react";
 
 export default function PaymentsDirectory() {
@@ -29,10 +29,18 @@ export default function PaymentsDirectory() {
 
       fetch(`/api/stripe/verify-session?session_id=${encodeURIComponent(sessionId)}`)
         .then((res) => res.json())
-        .then((data) => {
+        .then(async (data) => {
           if (data.verified && data.application) {
             toast.success("Payment confirmed successfully! Your application fee is paid.", { id: "payment-verify" });
-            setSelected(applicationToDetails(data.application));
+            let application = data.application;
+            if (data.applicationNumber) {
+              try {
+                application = (await getApplication(data.applicationNumber)) || application;
+              } catch (error) {
+                console.error("Could not refresh signed application attachments:", error);
+              }
+            }
+            setSelected(applicationToDetails(application));
           } else if (data.verified) {
             toast.success("Payment verified successfully!", { id: "payment-verify" });
           } else {
@@ -64,7 +72,9 @@ export default function PaymentsDirectory() {
     const link = document.createElement("a");
     link.href = url;
     link.download = `${selected.applicationId}.json`;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 

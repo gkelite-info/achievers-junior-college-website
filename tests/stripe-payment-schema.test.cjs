@@ -22,3 +22,24 @@ test('Stripe payment flow reads payment state from the transaction ledger', () =
   assert.match(verification, /paymentStatus:\s*isPaid\s*\?\s*"success"\s*:\s*"pending"/);
   assert.match(summary, /disabled=\{isPaid\s*\|\|\s*showPayment\}/);
 });
+
+test('deployed payment flow refreshes attachments and disables Stripe Link', () => {
+  const checkout = fs.readFileSync('src/app/api/stripe/create-checkout-session/route.ts', 'utf8');
+  const verification = fs.readFileSync('src/app/api/stripe/verify-session/route.ts', 'utf8');
+  const payments = fs.readFileSync('src/app/payments/PaymentsDirectory.tsx', 'utf8');
+
+  assert.match(checkout, /wallet_options:\s*\{\s*link:\s*\{\s*display:\s*["']never["']/s);
+  assert.match(verification, /const\s*\{\s*data,\s*error\s*\}\s*=\s*await\s+supabase\.storage/s);
+  assert.match(payments, /await\s+getApplication\(data\.applicationNumber\)/);
+});
+
+test('downloads and buttons use direct browser-download and pointer behavior', () => {
+  const form = fs.readFileSync('src/app/apply/ApplicationForm.tsx', 'utf8');
+  const payments = fs.readFileSync('src/app/payments/PaymentsDirectory.tsx', 'utf8');
+  const globals = fs.readFileSync('src/app/globals.css', 'utf8');
+
+  assert.match(form, /document\.body\.appendChild\(link\)/);
+  assert.match(payments, /document\.body\.appendChild\(link\)/);
+  assert.match(globals, /button:not\(:disabled\)[^{]*\{[^}]*cursor:\s*pointer/s);
+  assert.match(globals, /button:disabled[^{]*\{[^}]*cursor:\s*not-allowed/s);
+});

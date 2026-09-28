@@ -327,7 +327,9 @@ export default function ApplicationForm({
     const link = document.createElement("a");
     link.href = url;
     link.download = `achievers-application-${successModalData.applicationId}.json`;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
@@ -354,7 +356,9 @@ export default function ApplicationForm({
     const link = document.createElement("a");
     link.href = url;
     link.download = `achievers-application-${review?.applicationId || "record"}.json`;
+    document.body.appendChild(link);
     link.click();
+    link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 

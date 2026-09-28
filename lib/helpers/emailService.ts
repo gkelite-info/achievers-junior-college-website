@@ -17,6 +17,10 @@ export async function sendApplicationEmail(email: string, name: string, applicat
     console.warn("No email provided for application.");
     return false;
   }
+  if (!process.env.RESEND_API_KEY) {
+    console.error("Application email was not sent because RESEND_API_KEY is not configured.");
+    return false;
+  }
 
   const courseCode = getCourseCode(course);
   const courseDisplay = courseCode ? `${course} (${courseCode})` : course;

@@ -814,13 +814,17 @@ async function writeApplication(request: NextRequest, updating: boolean) {
     const applicationNumber = application.user.applicationNumber;
 
     if (!updating && payload.email) {
-
-      sendApplicationEmail(
+      const emailSent = await sendApplicationEmail(
         payload.email,
         `${payload.firstName} ${payload.lastName}`,
         applicationNumber,
-        payload.course
-      ).catch(console.error);
+        payload.course,
+      );
+      if (!emailSent) {
+        console.error("Application was saved, but its confirmation email was not delivered.", {
+          applicationNumber,
+        });
+      }
     }
 
     const response = NextResponse.json({ application }, { headers: { "Cache-Control": "no-store" } });

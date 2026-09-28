@@ -8,7 +8,7 @@ function load(file, dependencies = {}, overrides = {}) {
   const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  const internals = file === 'src/app/api/applications/route.ts' ? ['validateApplicationFile', 'createApplicationNumber', 'canAccessApplication', 'grantApplicationAccess', 'persistApplication', 'deleteStoredApplication'] : [];
+  const internals = file === 'src/app/api/applications/route.ts' ? ['validateApplicationFile', 'createApplicationNumber', 'canAccessApplication', 'grantApplicationAccess', 'persistApplication', 'deleteStoredApplication', 'writeApplication'] : [];
   const assignments = Object.keys(overrides).map(name => name + ' = overrides[' + JSON.stringify(name) + '];').join('\n');
   const expose = internals.length ? 'Object.assign(exports, {' + internals.join(',') + '});' : '';
   new Function('exports', 'require', 'overrides', source + '\n' + assignments + '\n' + expose)(exports, (name) => {
@@ -16,12 +16,60 @@ function load(file, dependencies = {}, overrides = {}) {
     if (name in dependencies) return dependencies[name];
     if (name === '@/lib/db') return { pool: {} };
     if (name === '@/app/apply/validation') return {};
+    if (name === '@/lib/helpers/emailService') return { sendApplicationEmail: async () => true, sendOTPEmail: async () => true };
     return require(name);
   }, overrides);
   return exports;
 }
 
 const storage = load('src/app/api/applications/route.ts');
+
+test('application creation waits for its email attempt before returning success', async () => {
+  const { NextRequest } = require('next/server');
+  let finishEmail;
+  let emailStarted = false;
+  const emailFinished = new Promise(resolve => { finishEmail = resolve; });
+  const route = load('src/app/api/applications/route.ts', {
+    '@/app/apply/validation': { validateApplication: () => ({}) },
+    '@/lib/helpers/emailService': {
+      sendApplicationEmail: async () => {
+        emailStarted = true;
+        await emailFinished;
+        return true;
+      },
+      sendOTPEmail: async () => true,
+    },
+  }, {
+    getSupabaseServer: () => ({}),
+    persistApplication: async () => ({
+      user: { applicationNumber: 'AJC-2026-0001' },
+      education: null,
+    }),
+    grantApplicationAccess: () => {},
+  });
+  const form = new FormData();
+  form.set('payload', JSON.stringify({
+    submissionId: '12345678-abcd-4abc-8abc-123456789abc',
+    email: 'student@example.com',
+    firstName: 'Test',
+    lastName: 'Student',
+    course: 'MPC',
+  }));
+  let responseSettled = false;
+  const responsePromise = route.writeApplication(new NextRequest('http://localhost/api/applications', {
+    method: 'POST',
+    body: form,
+  }), false).then(response => {
+    responseSettled = true;
+    return response;
+  });
+
+  while (!emailStarted) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(responseSettled, false);
+  finishEmail();
+  const response = await responsePromise;
+  assert.equal(response.status, 200);
+});
 
 test('file validation rejects renamed contents, mismatched MIME types, empty and oversized files', async () => {
   await assert.rejects(storage.validateApplicationFile(new File(['not a jpeg'], 'photo.jpg', { type: 'image/jpeg' }), 'profileImage'), /contents/);

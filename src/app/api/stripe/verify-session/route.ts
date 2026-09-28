@@ -32,7 +32,7 @@ function grantApplicationAccess(response: NextResponse, applicationNumber: strin
 }
 
 function getSupabaseServer() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -97,7 +97,15 @@ export async function GET(request: NextRequest) {
         ] as const) {
           if (!path) continue;
           try {
-            const { data } = await supabase.storage.from("application-documents").createSignedUrl(path, 3600);
+            const { data, error } = await supabase.storage.from("application-documents").createSignedUrl(path, 3600);
+            if (error) {
+              console.error("Could not sign payment attachment URL:", {
+                kind,
+                applicationNumber,
+                message: error.message,
+              });
+              continue;
+            }
             if (data?.signedUrl) {
               attachments[kind as keyof typeof attachments] = data.signedUrl;
             }

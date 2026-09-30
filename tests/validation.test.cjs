@@ -106,3 +106,80 @@ test('validates Class X percentage range (0 - 100)', () => {
   const valid = validateApplication({ ...validApplicant, classXPercentage: '92.4' }, undefined, dummyFiles);
   assert.equal(valid.classXPercentage, undefined);
 });
+
+const { formatName, formatTitleCase, formatSchoolOrBoard, formatDigitsOnly } = load('src/app/apply/validation.ts');
+
+test('formatName converts small letters to capital, keeps dots and spaces, strips digits and special characters', () => {
+  assert.equal(formatName('john'), 'John');
+  assert.equal(formatName('john doe'), 'John Doe');
+  assert.equal(formatName('k.raju'), 'K.Raju');
+  assert.equal(formatName('k. raju'), 'K. Raju');
+  assert.equal(formatName('a.b. c'), 'A.B. C');
+  assert.equal(formatName('john123!@#'), 'John');
+  assert.equal(formatName('mary  jane'), 'Mary Jane');
+});
+
+test('formatTitleCase capitalizes first letter and after space, strips numbers and special chars', () => {
+  assert.equal(formatTitleCase('telangana'), 'Telangana');
+  assert.equal(formatTitleCase('andhra pradesh'), 'Andhra Pradesh');
+  assert.equal(formatTitleCase('new delhi123!'), 'New Delhi');
+});
+
+test('formatSchoolOrBoard capitalizes start and after space/dot, strips numbers and symbols', () => {
+  assert.equal(formatSchoolOrBoard('achievers high school'), 'Achievers High School');
+  assert.equal(formatSchoolOrBoard('state board'), 'State Board');
+  assert.equal(formatSchoolOrBoard('st. mary school'), 'St. Mary School');
+  assert.equal(formatSchoolOrBoard('cbse 123!'), 'Cbse ');
+});
+
+test('formatDigitsOnly extracts digits and limits length', () => {
+  assert.equal(formatDigitsOnly('9876543210123', 10), '9876543210');
+  assert.equal(formatDigitsOnly('2024abc!', 4), '2024');
+  assert.equal(formatDigitsOnly('85%', 2), '85');
+  assert.equal(formatDigitsOnly('100', 2), '10');
+});
+
+test('validates First Name, Last Name, Father and Mother Name capitalization and character constraints', () => {
+  // Lowercase first letter should fail
+  assert.ok(validateApplication({ ...validApplicant, firstName: 'ramu' }, undefined, dummyFiles).firstName);
+  assert.ok(validateApplication({ ...validApplicant, lastName: 'kumar' }, undefined, dummyFiles).lastName);
+  assert.ok(validateApplication({ ...validApplicant, fatherName: 'raju' }, undefined, dummyFiles).fatherName);
+  assert.ok(validateApplication({ ...validApplicant, motherName: 'rani' }, undefined, dummyFiles).motherName);
+
+  // Digits and special characters should fail
+  assert.ok(validateApplication({ ...validApplicant, firstName: 'Ramu123' }, undefined, dummyFiles).firstName);
+  assert.ok(validateApplication({ ...validApplicant, lastName: 'Kumar@' }, undefined, dummyFiles).lastName);
+  assert.ok(validateApplication({ ...validApplicant, fatherName: 'Raju#' }, undefined, dummyFiles).fatherName);
+
+  // Lowercase after space should fail
+  assert.ok(validateApplication({ ...validApplicant, firstName: 'Ramu kumar' }, undefined, dummyFiles).firstName);
+
+  // Dots and spaces with capital letters are valid
+  assert.equal(validateApplication({ ...validApplicant, firstName: 'K. Ramu' }, undefined, dummyFiles).firstName, undefined);
+  assert.equal(validateApplication({ ...validApplicant, lastName: 'K.' }, undefined, dummyFiles).lastName, undefined);
+  assert.equal(validateApplication({ ...validApplicant, fatherName: 'P. Raju Kumar' }, undefined, dummyFiles).fatherName, undefined);
+});
+
+test('validates State and City capitalization and no special characters', () => {
+  assert.ok(validateApplication({ ...validApplicant, state: 'telangana' }, undefined, dummyFiles).state);
+  assert.ok(validateApplication({ ...validApplicant, state: 'Andhra pradesh' }, undefined, dummyFiles).state);
+  assert.ok(validateApplication({ ...validApplicant, state: 'Telangana123' }, undefined, dummyFiles).state);
+  assert.equal(validateApplication({ ...validApplicant, state: 'Andhra Pradesh' }, undefined, dummyFiles).state, undefined);
+
+  assert.ok(validateApplication({ ...validApplicant, city: 'kamareddy' }, undefined, dummyFiles).city);
+  assert.ok(validateApplication({ ...validApplicant, city: 'New delhi' }, undefined, dummyFiles).city);
+  assert.equal(validateApplication({ ...validApplicant, city: 'New Delhi' }, undefined, dummyFiles).city, undefined);
+});
+
+test('validates School Name and Board capitalization and no integers', () => {
+  assert.ok(validateApplication({ ...validApplicant, classXSchool: 'achievers high' }, undefined, dummyFiles).classXSchool);
+  assert.ok(validateApplication({ ...validApplicant, classXSchool: 'Achievers 123' }, undefined, dummyFiles).classXSchool);
+  assert.ok(validateApplication({ ...validApplicant, classXSchool: 'Achievers high school' }, undefined, dummyFiles).classXSchool);
+  assert.equal(validateApplication({ ...validApplicant, classXSchool: 'St. Mary High School' }, undefined, dummyFiles).classXSchool, undefined);
+
+  assert.ok(validateApplication({ ...validApplicant, classXBoard: 'state board' }, undefined, dummyFiles).classXBoard);
+  assert.ok(validateApplication({ ...validApplicant, classXBoard: 'State board' }, undefined, dummyFiles).classXBoard);
+  assert.ok(validateApplication({ ...validApplicant, classXBoard: 'CBSE 12' }, undefined, dummyFiles).classXBoard);
+  assert.equal(validateApplication({ ...validApplicant, classXBoard: 'State Board' }, undefined, dummyFiles).classXBoard, undefined);
+});
+

@@ -286,3 +286,71 @@ export async function sendPaymentSuccessEmail({
   }
 }
 
+export async function sendPasswordResetOTPEmail(email: string, otp: string, name: string) {
+  if (!email) {
+    console.warn("No email provided for password reset OTP.");
+    return false;
+  }
+
+  const htmlContent = `
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9fafb; padding: 20px;">
+      <div style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border: 1px solid #e2e8f0;">
+        
+        <!-- Header -->
+        <div style="background-color: #101631; padding: 30px; text-align: center;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 700;">Achievers Junior College</h1>
+          <p style="color: #94a3b8; margin: 8px 0 0 0; font-size: 14px;">Admin Portal - Password Reset</p>
+        </div>
+
+        <!-- Body -->
+        <div style="padding: 40px 30px; color: #334155; line-height: 1.6;">
+          <h2 style="color: #101631; margin: 0 0 16px 0; font-size: 20px;">Your Password Reset Code</h2>
+          <p style="font-size: 15px; margin-top: 0;">Hello <strong>${name}</strong>,</p>
+          
+          <p style="font-size: 15px;">You requested to reset your password for the Achievers Junior College Admin Portal. Please use the One-Time Password (OTP) below to verify your access:</p>
+          
+          <!-- Callout Box -->
+          <div style="background-color: #f1f5f9; border-left: 4px solid #101631; padding: 20px; margin: 24px 0; border-radius: 0 8px 8px 0; text-align: center;">
+            <p style="margin: 0; font-size: 13px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 1px;">6-Digit OTP</p>
+            <p style="margin: 8px 0 0 0; font-size: 32px; font-weight: 800; color: #101631; letter-spacing: 6px;">${otp}</p>
+          </div>
+          
+          <p style="font-size: 14px; color: #e11d48; font-weight: 600;">
+            ⏳ This OTP will expire in 10 minutes.
+          </p>
+          
+          <p style="font-size: 13px; color: #64748b; margin-bottom: 0;">If you did not request a password reset, you can safely ignore this email.</p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f8fafc; padding: 20px 30px; border-top: 1px solid #e2e8f0; text-align: center;">
+          <p style="margin: 0; color: #64748b; font-size: 13px; font-weight: 600;">Achievers Junior College Admin Security</p>
+        </div>
+
+      </div>
+    </div>
+  `;
+
+  try {
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const { data, error } = await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@achieversjuniorcollege.in>',
+      to: email,
+      subject: "Password Reset Verification Code - Achievers Junior College",
+      html: htmlContent,
+    });
+
+    if (error) {
+      console.error("Resend error sending reset OTP email: ", error);
+      return false;
+    }
+
+    console.log("Reset OTP email sent via Resend: %s", data?.id);
+    return true;
+  } catch (error) {
+    console.error("Unexpected error sending reset OTP email: ", error);
+    return false;
+  }
+}
+
+

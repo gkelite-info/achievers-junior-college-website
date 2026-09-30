@@ -21,7 +21,15 @@ import {
 } from "@phosphor-icons/react";
 import ApplicationSummary from "./ApplicationSummary";
 import ApplicationSuccessModal from "./ApplicationSuccessModal";
-import { validateApplication, type FormErrors } from "./validation";
+import {
+  validateApplication,
+  formatName,
+  formatTitleCase,
+  formatSchoolOrBoard,
+  formatDigitsOnly,
+  formatAddress,
+  type FormErrors,
+} from "./validation";
 import { applicationToDetails, useSubmitApplication, type ApplicationInputPayload } from "@/lib/helpers/applicationsAPI";
 import { useAdmissions } from "@/lib/helpers/admissionsAPI";
 import Image from "next/image";
@@ -137,11 +145,23 @@ export default function ApplicationForm({
   const defaultCourse = searchParams.get("course") || "";
   const defaultFee = searchParams.get("fee") || "0";
 
-  // Name capitalization helper
-  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    if (val.length > 0) {
-      e.target.value = val.charAt(0).toUpperCase() + val.slice(1);
+  // Real-time input formatting helper that sanitizes values and preserves cursor position
+  const applyInputFormat = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    formatter: (val: string) => string
+  ) => {
+    const input = e.target;
+    const start = input.selectionStart;
+    const oldVal = input.value;
+    const newVal = formatter(oldVal);
+
+    if (oldVal !== newVal) {
+      input.value = newVal;
+      if (start !== null) {
+        const diff = newVal.length - oldVal.length;
+        const newPos = Math.max(0, Math.min(newVal.length, start + diff));
+        input.setSelectionRange(newPos, newPos);
+      }
     }
   };
 
@@ -163,7 +183,13 @@ export default function ApplicationForm({
         if (typeof value !== "string") continue;
         const input = form.current.elements.namedItem(name);
         if (input instanceof RadioNodeList) input.value = value;
-        else if (input instanceof HTMLInputElement && input.type !== "file" && !input.readOnly) input.value = value;
+        else if (input instanceof HTMLInputElement && input.type !== "file" && !input.readOnly) {
+          if (name === "classXPercentage") {
+            input.value = value.replace(/%/g, "").trim().slice(0, 2);
+          } else {
+            input.value = value;
+          }
+        }
         else if (input instanceof HTMLSelectElement || input instanceof HTMLTextAreaElement) input.value = value;
       }
     } catch {
@@ -492,7 +518,7 @@ export default function ApplicationForm({
                   className={inputClass(Boolean(errors.firstName))}
                   onChange={(e) => {
                     clearError("firstName");
-                    handleNameChange(e);
+                    applyInputFormat(e, formatName);
                   }}
                 />
               </Field>
@@ -506,7 +532,7 @@ export default function ApplicationForm({
                   className={inputClass(Boolean(errors.lastName))}
                   onChange={(e) => {
                     clearError("lastName");
-                    handleNameChange(e);
+                    applyInputFormat(e, formatName);
                   }}
                 />
               </Field>
@@ -519,7 +545,7 @@ export default function ApplicationForm({
                   className={inputClass(Boolean(errors.fatherName))}
                   onChange={(e) => {
                     clearError("fatherName");
-                    handleNameChange(e);
+                    applyInputFormat(e, formatName);
                   }}
                 />
               </Field>
@@ -532,7 +558,7 @@ export default function ApplicationForm({
                   className={inputClass(Boolean(errors.motherName))}
                   onChange={(e) => {
                     clearError("motherName");
-                    handleNameChange(e);
+                    applyInputFormat(e, formatName);
                   }}
                 />
               </Field>
@@ -605,7 +631,10 @@ export default function ApplicationForm({
                     ? "border-red-500 bg-red-50/40 focus:ring-red-500"
                     : "border-[#e1e9f2] focus:ring-[#2865ef]"
                     }`}
-                  onChange={() => clearError("address")}
+                  onChange={(e) => {
+                    clearError("address");
+                    applyInputFormat(e as any, formatAddress);
+                  }}
                 />
               </Field>
 
@@ -618,7 +647,7 @@ export default function ApplicationForm({
                   className={inputClass(Boolean(errors.state))}
                   onChange={(e) => {
                     clearError("state");
-                    handleNameChange(e);
+                    applyInputFormat(e, formatTitleCase);
                   }}
                 />
               </Field>
@@ -630,7 +659,10 @@ export default function ApplicationForm({
                   placeholder="Enter city"
                   maxLength={50}
                   className={inputClass(Boolean(errors.city))}
-                  onChange={() => clearError("city")}
+                  onChange={(e) => {
+                    clearError("city");
+                    applyInputFormat(e, formatTitleCase);
+                  }}
                 />
               </Field>
 
@@ -642,7 +674,10 @@ export default function ApplicationForm({
                   maxLength={6}
                   placeholder="Enter 6-digit pin code"
                   className={inputClass(Boolean(errors.pinCode))}
-                  onChange={() => clearError("pinCode")}
+                  onChange={(e) => {
+                    clearError("pinCode");
+                    applyInputFormat(e, (v) => formatDigitsOnly(v, 6));
+                  }}
                 />
               </Field>
 
@@ -651,10 +686,14 @@ export default function ApplicationForm({
                   name="phone"
                   type="tel"
                   autoComplete="tel"
+                  inputMode="numeric"
                   maxLength={10}
                   placeholder="Enter 10-digit mobile number"
                   className={inputClass(Boolean(errors.phone))}
-                  onChange={() => clearError("phone")}
+                  onChange={(e) => {
+                    clearError("phone");
+                    applyInputFormat(e, (v) => formatDigitsOnly(v, 10));
+                  }}
                 />
               </Field>
 
@@ -735,8 +774,12 @@ export default function ApplicationForm({
                           name={`class${level}School`}
                           aria-label={`Class ${level} school`}
                           placeholder="Enter school name"
+                          maxLength={100}
                           className={tableInputClass(Boolean(errors.classXSchool))}
-                          onChange={() => clearError("classXSchool")}
+                          onChange={(e) => {
+                            clearError("classXSchool");
+                            applyInputFormat(e, formatSchoolOrBoard);
+                          }}
                         />
                         {errors.classXSchool && (
                           <span className="block text-[10px] font-medium text-red-600 mt-1 leading-tight" role="alert">
@@ -749,8 +792,12 @@ export default function ApplicationForm({
                           name={`class${level}Board`}
                           aria-label={`Class ${level} board`}
                           placeholder="Enter board (e.g. SSC / CBSE)"
+                          maxLength={50}
                           className={tableInputClass(Boolean(errors.classXBoard))}
-                          onChange={() => clearError("classXBoard")}
+                          onChange={(e) => {
+                            clearError("classXBoard");
+                            applyInputFormat(e, formatSchoolOrBoard);
+                          }}
                         />
                         {errors.classXBoard && (
                           <span className="block text-[10px] font-medium text-red-600 mt-1 leading-tight" role="alert">
@@ -765,10 +812,12 @@ export default function ApplicationForm({
                           type="text"
                           inputMode="numeric"
                           maxLength={4}
-                          pattern="\d{4}"
                           placeholder="YYYY"
                           className={tableInputClass(Boolean(errors.classXYear))}
-                          onChange={() => clearError("classXYear")}
+                          onChange={(e) => {
+                            clearError("classXYear");
+                            applyInputFormat(e, (v) => formatDigitsOnly(v, 4));
+                          }}
                         />
                         {errors.classXYear && (
                           <span className="block text-[10px] font-medium text-red-600 mt-1 leading-tight" role="alert">
@@ -777,17 +826,27 @@ export default function ApplicationForm({
                         )}
                       </td>
                       <td>
-                        <input
-                          name={`class${level}Percentage`}
-                          aria-label={`Class ${level} percentage`}
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.01"
-                          placeholder="Enter %"
-                          className={tableInputClass(Boolean(errors.classXPercentage))}
-                          onChange={() => clearError("classXPercentage")}
-                        />
+                        <div className="relative flex items-center min-w-0">
+                          <input
+                            name={`class${level}Percentage`}
+                            aria-label={`Class ${level} percentage`}
+                            type="text"
+                            inputMode="numeric"
+                            maxLength={2}
+                            placeholder="85"
+                            className={`${tableInputClass(Boolean(errors.classXPercentage))} pr-6 font-medium`}
+                            onChange={(e) => {
+                              clearError("classXPercentage");
+                              applyInputFormat(e, (v) => formatDigitsOnly(v, 2));
+                            }}
+                          />
+                          <span
+                            className="absolute right-2 text-[#556987] font-bold text-[11px] pointer-events-none select-none"
+                            aria-hidden="true"
+                          >
+                            %
+                          </span>
+                        </div>
                         {errors.classXPercentage && (
                           <span className="block text-[10px] font-medium text-red-600 mt-1 leading-tight" role="alert">
                             {errors.classXPercentage}
@@ -845,7 +904,7 @@ export default function ApplicationForm({
             </div>
 
             <div className="flex justify-end flex-wrap gap-3 mt-10">
-              <button
+              {/* <button
                 type="button"
                 onClick={reset}
                 className="inline-flex items-center justify-center gap-2 min-h-[40px] rounded-[7px] px-5 py-2.5 border border-[#ccd8e7] bg-white text-[#35465e] text-xs font-medium hover:bg-slate-50 transition cursor-pointer"
@@ -860,7 +919,7 @@ export default function ApplicationForm({
               >
                 <FloppyDisk size={15} />
                 Save as Draft
-              </button>
+              </button> */}
               <button
                 type="submit"
                 disabled={submitMutation.isPending}

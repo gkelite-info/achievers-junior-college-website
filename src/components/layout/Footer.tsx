@@ -1,7 +1,20 @@
+"use client";
+
 import Link from "next/link";
-import { InstagramLogo, ThreadsLogo, XLogo, PaperPlaneRight } from "@phosphor-icons/react/dist/ssr";
+import { usePathname } from "next/navigation";
+import { InstagramLogo, ThreadsLogo, XLogo, PaperPlaneRight } from "@phosphor-icons/react";
 
 export default function Footer() {
+  const pathname = usePathname();
+
+  if (
+    pathname?.includes("/registration") ||
+    pathname?.includes("/login") ||
+    pathname?.includes("/forgot-password")
+  ) {
+    return null;
+  }
+
   return (
     <footer className="bg-[#111433] pt-[63px] pb-[64px]">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-[40px]">

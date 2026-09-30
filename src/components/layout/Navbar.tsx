@@ -38,6 +38,14 @@ export default function Navbar() {
     return () => window.removeEventListener("hashchange", redirectLegacyPage);
   }, [pathname, router]);
 
+  if (
+    pathname?.includes("/registration") ||
+    pathname?.includes("/login") ||
+    pathname?.includes("/forgot-password")
+  ) {
+    return null;
+  }
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 h-[68px] w-full bg-[#f7f9fb] border-b border-white/20 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-[40px]">

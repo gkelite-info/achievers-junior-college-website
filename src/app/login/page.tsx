@@ -55,8 +55,12 @@ export default function LoginPage() {
         saveTokens(result.session);
       }
 
+      if (result.user) {
+        localStorage.setItem("admin_user", JSON.stringify(result.user));
+      }
+
       toast.success("Welcome back!");
-      router.push("/");
+      router.push("/admin/applications");
     } catch (error: unknown) {
       const err = error as Error;
       toast.error(err?.message || "Failed to log in.");

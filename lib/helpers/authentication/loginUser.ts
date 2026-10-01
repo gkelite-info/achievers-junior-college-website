@@ -25,7 +25,7 @@ export async function loginUser(email: string, password: string) {
       error: profileError,
     } = await supabase
       .from("auth_users")
-      .select("authUserId, firstName, lastName, role, isActive")
+      .select("authUserId, firstName, lastName, role, isActive, email")
       .eq("authUserId", authData.user.id)
       .maybeSingle();
 

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { pool } from "@/lib/db";
+import { supabase } from "@/lib/supabaseClient";
 
 // Initialize Resend
-// Note: You must add RESEND_API_KEY to your .env.local
 const resend = new Resend(process.env.RESEND_API_KEY || "re_dummy_key");
 
 export async function POST(request: NextRequest) {
@@ -18,13 +18,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Template type is required" }, { status: 400 });
     }
 
-    const { getCourseCode } = await import("@/lib/helpers/emailService");
-
     const emailPayloads = recipients.map((recipient: any) => {
-      const { emailId, firstName, lastName, applicationNumber, course } = recipient;
-
-      const courseCode = getCourseCode(course);
-      const courseDisplay = courseCode ? `${course} (${courseCode})` : course;
+      const { emailId, firstName, lastName, applicationNumber } = recipient;
 
       let subject = "";
       let emailContent = "";
@@ -36,7 +31,28 @@ export async function POST(request: NextRequest) {
       const bodyStyles = `padding: 40px 30px; color: #334155; line-height: 1.6;`;
       const footerStyles = `background-color: #f8fafc; padding: 24px 30px; border-top: 1px solid #e2e8f0; text-align: center;`;
 
-      if (templateType === "congratulate") {
+      if (templateType === "verification") {
+        subject = `Certificate Verification Schedule - ${applicationNumber}`;
+        emailContent = `
+          <div style="${baseStyles}">
+            <div style="${cardStyles}">
+              <div style="${headerStyles}">
+                <h1 style="${h1Styles}">Achievers Junior College</h1>
+                <p style="color: #e2e8f0; margin: 8px 0 0 0; font-size: 16px;">Certificate Verification Schedule</p>
+              </div>
+              <div style="${bodyStyles}">
+                <p style="font-size: 16px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
+                <p style="font-size: 16px; line-height: 1.6;">We have reviewed your application and would like to invite you for the physical verification of your certificates and documents as part of the admission process.</p>
+                <p style="font-size: 16px; line-height: 1.6;">Please visit the campus between 10:00 AM and 4:00 PM on any working day.</p>
+                <p style="font-size: 16px; margin-top: 30px; margin-bottom: 0;">Best regards,<br/><strong>Admissions Office</strong><br/>Achievers Junior College</p>
+              </div>
+              <div style="${footerStyles}">
+                <p style="margin: 0; color: #64748b; font-size: 14px; font-weight: 600;">Achievers Junior College</p>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (templateType === "congratulate") {
         subject = `Admission Selection Offer - ${applicationNumber}`;
         emailContent = `
           <div style="${baseStyles}">
@@ -46,39 +62,9 @@ export async function POST(request: NextRequest) {
                 <p style="color: #e2e8f0; margin: 8px 0 0 0; font-size: 16px;">Congratulations! Admission Offer</p>
               </div>
               <div style="${bodyStyles}">
-                <p style="font-size: 18px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
-                <p style="font-size: 16px;">We are thrilled to inform you that you have been selected for admission into Achievers Junior College for the course <strong>${courseDisplay}</strong>.</p>
-                <div style="background-color: #f1f5f9; border-left: 4px solid #10b981; padding: 20px; margin: 30px 0; border-radius: 0 8px 8px 0;">
-                  <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: 600;">Your Application Number</p>
-                  <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: 800; color: #0f172a; letter-spacing: 1px;">${applicationNumber}</p>
-                </div>
-                <p style="font-size: 16px;">Please complete your admission process by visiting the college campus with your original documents.</p>
-                <p style="font-size: 16px; margin-bottom: 0;">Best Regards,<br/><strong>Admissions Team</strong><br/>Achievers Junior College</p>
-              </div>
-              <div style="${footerStyles}">
-                <p style="margin: 0; color: #64748b; font-size: 14px; font-weight: 600;">Achievers Junior College</p>
-              </div>
-            </div>
-          </div>
-        `;
-      } else if (templateType === "verification") {
-        subject = `Document Verification Required - ${applicationNumber}`;
-        emailContent = `
-          <div style="${baseStyles}">
-            <div style="${cardStyles}">
-              <div style="${headerStyles}">
-                <h1 style="${h1Styles}">Achievers Junior College</h1>
-                <p style="color: #e2e8f0; margin: 8px 0 0 0; font-size: 16px;">Document Verification Required</p>
-              </div>
-              <div style="${bodyStyles}">
-                <p style="font-size: 18px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
-                <p style="font-size: 16px;">Your application for <strong>${courseDisplay}</strong> requires further document verification.</p>
-                <div style="background-color: #fefce8; border-left: 4px solid #eab308; padding: 20px; margin: 30px 0; border-radius: 0 8px 8px 0;">
-                  <p style="margin: 0; font-size: 14px; color: #854d0e; text-transform: uppercase; font-weight: 600;">Your Application Number</p>
-                  <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: 800; color: #422006; letter-spacing: 1px;">${applicationNumber}</p>
-                </div>
-                <p style="font-size: 16px;">Please ensure all your submitted documents are clear and accurate. You may be contacted by our admissions team shortly for further verification steps.</p>
-                <p style="font-size: 16px; margin-bottom: 0;">Best Regards,<br/><strong>Admissions Team</strong><br/>Achievers Junior College</p>
+                <p style="font-size: 16px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
+                <p style="font-size: 16px; line-height: 1.6;">Congratulations! We are pleased to inform you that you have been selected for admission at Achievers Junior College.</p>
+                <p style="font-size: 16px; margin-top: 30px; margin-bottom: 0;">Best regards,<br/><strong>Admissions Office</strong><br/>Achievers Junior College</p>
               </div>
               <div style="${footerStyles}">
                 <p style="margin: 0; color: #64748b; font-size: 14px; font-weight: 600;">Achievers Junior College</p>
@@ -87,23 +73,18 @@ export async function POST(request: NextRequest) {
           </div>
         `;
       } else if (templateType === "regret") {
-        subject = `Update on Application - ${applicationNumber}`;
+        subject = `Admission Application Status Update - ${applicationNumber}`;
         emailContent = `
           <div style="${baseStyles}">
             <div style="${cardStyles}">
               <div style="${headerStyles}">
                 <h1 style="${h1Styles}">Achievers Junior College</h1>
-                <p style="color: #e2e8f0; margin: 8px 0 0 0; font-size: 16px;">Application Update</p>
+                <p style="color: #e2e8f0; margin: 8px 0 0 0; font-size: 16px;">Application Status Update</p>
               </div>
               <div style="${bodyStyles}">
-                <p style="font-size: 18px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
-                <p style="font-size: 16px;">Thank you for applying to Achievers Junior College for <strong>${courseDisplay}</strong>.</p>
-                <div style="background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 20px; margin: 30px 0; border-radius: 0 8px 8px 0;">
-                  <p style="margin: 0; font-size: 14px; color: #64748b; text-transform: uppercase; font-weight: 600;">Your Application Number</p>
-                  <p style="margin: 8px 0 0 0; font-size: 24px; font-weight: 800; color: #334155; letter-spacing: 1px;">${applicationNumber}</p>
-                </div>
-                <p style="font-size: 16px;">We regret to inform you that we are unable to offer you admission at this time. We wish you the best in your future academic endeavors.</p>
-                <p style="font-size: 16px; margin-bottom: 0;">Best Regards,<br/><strong>Admissions Team</strong><br/>Achievers Junior College</p>
+                <p style="font-size: 16px; margin-top: 0;">Dear <strong>${firstName} ${lastName}</strong>,</p>
+                <p style="font-size: 16px; line-height: 1.6;">Thank you for your interest in Achievers Junior College. We regret to inform you that we are unable to offer you admission at this time.</p>
+                <p style="font-size: 16px; margin-top: 30px; margin-bottom: 0;">Best regards,<br/><strong>Admissions Office</strong><br/>Achievers Junior College</p>
               </div>
               <div style="${footerStyles}">
                 <p style="margin: 0; color: #64748b; font-size: 14px; font-weight: 600;">Achievers Junior College</p>
@@ -113,11 +94,11 @@ export async function POST(request: NextRequest) {
         `;
       } else {
         subject = `Application Update - ${applicationNumber}`;
-        emailContent = `<p>Dear ${firstName}, an update has been made to your application ${applicationNumber} for ${courseDisplay}.</p>`;
+        emailContent = `<p>Dear ${firstName}, an update has been made to your application ${applicationNumber}.</p>`;
       }
 
       return {
-        from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@achieversjuniorcollege.in>', // Since you have a paid account, we use a custom domain
+        from: process.env.RESEND_FROM_EMAIL || 'Achievers Junior College <noreply@achieversjuniorcollege.in>',
         to: emailId,
         subject: subject,
         html: emailContent,
@@ -147,30 +128,46 @@ export async function POST(request: NextRequest) {
     else if (templateType === "verification") admissionStatus = "Verification";
     else if (templateType === "regret") admissionStatus = "Regret";
 
-    // Update the applications in the DB (public.users table)
-    const applicationIds = recipients.map((r: any) => r.applicationId || r.applicationNumber).filter(Boolean);
+    // Update the applications in the DB using applicationNumber (e.g., 'AJC-2026-0011')
+    const appNumbers = recipients.map((r: any) => r.applicationNumber).filter(Boolean);
 
-    if (applicationIds.length > 0) {
-      const client = await pool.connect();
+    if (appNumbers.length > 0) {
+      // 1. Update via Supabase client (triggers Realtime subscriptions for UI update)
       try {
-        // We build a parameterized query for the IN clause
-        const placeholders = applicationIds.map((_: any, index: number) => `$${index + 2}`).join(", ");
-        const updateQuery = `
-          UPDATE public.users 
-          SET "admissionStatus" = $1, "updatedAt" = NOW() 
-          WHERE "applicationNumber" IN (${placeholders}) OR "userId"::text IN (${placeholders})
-        `;
+        const { error: sbError } = await supabase
+          .from("users")
+          .update({ admissionStatus, updatedAt: new Date().toISOString() })
+          .in("applicationNumber", appNumbers);
+        if (sbError) {
+          console.error("Supabase admissionStatus update error:", sbError);
+        }
+      } catch (sbErr) {
+        console.error("Supabase update exception:", sbErr);
+      }
 
-        await client.query(updateQuery, [admissionStatus, ...applicationIds]);
+      // 2. Fallback update via pg pool
+      try {
+        const client = await pool.connect();
+        try {
+          const placeholders = appNumbers.map((_: any, index: number) => `$${index + 2}`).join(", ");
+          const updateQuery = `
+            UPDATE public.users 
+            SET "admissionStatus" = $1, "updatedAt" = NOW() 
+            WHERE "applicationNumber" IN (${placeholders})
+          `;
+          await client.query(updateQuery, [admissionStatus, ...appNumbers]);
+        } finally {
+          client.release();
+        }
       } catch (dbError) {
-        console.error("Database update error:", dbError);
-        return NextResponse.json({ error: "Emails sent but failed to update database status" }, { status: 500 });
-      } finally {
-        client.release();
+        console.error("Database pool update error:", dbError);
       }
     }
 
-    return NextResponse.json({ success: true, message: `Successfully processed ${emailPayloads.length} emails.` }, { status: 200 });
+    return NextResponse.json(
+      { success: true, message: `Successfully processed ${emailPayloads.length} emails.`, admissionStatus },
+      { status: 200 }
+    );
 
   } catch (error) {
     console.error("Bulk email error:", error);

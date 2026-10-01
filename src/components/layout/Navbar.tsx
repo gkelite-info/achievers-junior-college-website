@@ -41,7 +41,8 @@ export default function Navbar() {
   if (
     pathname?.includes("/registration") ||
     pathname?.includes("/login") ||
-    pathname?.includes("/forgot-password")
+    pathname?.includes("/forgot-password") ||
+    pathname?.startsWith("/admin")
   ) {
     return null;
   }

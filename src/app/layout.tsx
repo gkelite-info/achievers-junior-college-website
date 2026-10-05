@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Sora } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
 import QueryProvider from "@/components/providers/QueryProvider";
+import { UserProvider } from "@/context/UserContext";
+import ClientLayout from "@/components/layout/ClientLayout";
 import ApplyModal from "@/components/layout/ApplyModal";
 import AnalyticsTracker from "@/components/AnalyticsTracker";
 import { Suspense } from "react";
@@ -91,18 +91,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="en"
       className={`${sora.variable} h-full antialiased scroll-smooth overflow-x-hidden`}
     >
-      <body className="min-h-full flex flex-col pt-[68px]">
+      <body className="min-h-full flex flex-col">
         <QueryProvider>
-          <Navbar />
-          <main className="flex-grow">
-            {children}
-          </main>
-          <Footer />
-          <Suspense fallback={null}>
-            <ApplyModal />
-            <AnalyticsTracker />
-          </Suspense>
-          <Toaster position="top-right" />
+          <UserProvider>
+            <ClientLayout>
+              {children}
+            </ClientLayout>
+            <Suspense fallback={null}>
+              <ApplyModal />
+              <AnalyticsTracker />
+            </Suspense>
+            <Toaster position="top-right" />
+          </UserProvider>
         </QueryProvider>
       </body>
     </html>

@@ -3,10 +3,13 @@
 import { useQuery } from "@tanstack/react-query";
 
 export type CourseAdmissionInfo = {
-  collegeBranchId: number;
+  collegeBranchId: string | number;
   courseName: string;
+  courseCode?: string;
+  educationName?: string;
   isAdmissionsOpen: boolean;
   admissionFee: number;
+  isHidden?: boolean;
 };
 
 export type AdmissionsData = {

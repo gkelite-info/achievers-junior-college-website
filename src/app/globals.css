@@ -31,3 +31,77 @@ button:disabled,
 
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 input[type=number] { -moz-appearance: textfield; }
+
+/* Proper Shimmer Animation */
+@keyframes shimmerWave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    90deg,
+    #edf2f7 20%,
+    #f8fafc 38%,
+    #ffffff 50%,
+    #f8fafc 62%,
+    #edf2f7 80%
+  );
+  background-size: 220% 100%;
+  animation: shimmerWave 1.35s linear infinite;
+  will-change: background-position;
+}
+
+.shimmer-dark {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(
+    90deg,
+    #1e293b 20%,
+    #334155 40%,
+    #475569 50%,
+    #334155 60%,
+    #1e293b 80%
+  );
+  background-size: 220% 100%;
+  animation: shimmerWave 1.35s linear infinite;
+  will-change: background-position;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shimmer,
+  .shimmer-dark {
+    animation-duration: 3s;
+  }
+}
+
+/* Gallery Vertical Scroll Container */
+.gallery-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #0A1E37 #f1f5f9;
+}
+
+.gallery-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.gallery-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+}
+
+.gallery-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+  transition: background-color 0.2s ease;
+}
+
+.gallery-scroll::-webkit-scrollbar-thumb:hover {
+  background: #0A1E37;
+}

@@ -1,9 +1,11 @@
 "use server";
 
-import { supabase } from "../../supabaseClient";
+import { createClient } from "../../supabaseServer";
 
 export async function loginUser(email: string, password: string) {
   try {
+    const supabase = await createClient();
+
     const {
       data: authData,
       error: authError,
@@ -25,7 +27,7 @@ export async function loginUser(email: string, password: string) {
       error: profileError,
     } = await supabase
       .from("auth_users")
-      .select("authUserId, firstName, lastName, role, isActive, email")
+      .select("authUserId, firstName, lastName, role, isActive, email, mobile, gender")
       .eq("authUserId", authData.user.id)
       .maybeSingle();
 
@@ -34,7 +36,7 @@ export async function loginUser(email: string, password: string) {
 
       return {
         success: false,
-        error: "User profile not found.",
+        error: "User profile not found. Please contact administration.",
       };
     }
 
@@ -43,7 +45,7 @@ export async function loginUser(email: string, password: string) {
 
       return {
         success: false,
-        error: "Your account is inactive.",
+        error: "Your account is inactive. Please contact administration.",
       };
     }
 
@@ -59,5 +61,16 @@ export async function loginUser(email: string, password: string) {
       success: false,
       error: "An unexpected server error occurred.",
     };
+  }
+}
+
+export async function logoutUser() {
+  try {
+    const supabase = await createClient();
+    await supabase.auth.signOut();
+    return { success: true };
+  } catch (err) {
+    console.error("Logout Server Action Error:", err);
+    return { success: false, error: "Failed to sign out on server." };
   }
 }

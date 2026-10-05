@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -12,17 +12,32 @@ import {
 } from "@phosphor-icons/react";
 import { loginUser } from "@/lib/helpers/authentication/loginUser";
 import { saveTokens } from "@/lib/helpers/authentication/tokenStorage";
-import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
+import { useUser } from "@/context/UserContext";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
-export default function LoginPage() {
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { refreshUserContext } = useUser();
 
   const isFormFilled = Boolean(email.trim() && password.trim());
+
+  useEffect(() => {
+    const error = searchParams.get("error");
+    if (error === "profile_not_found") {
+      toast.error("Profile not found. Please contact administration.", { id: "auth-err" });
+    } else if (error === "account_inactive") {
+      toast.error("Your account is inactive. Please contact administration.", { id: "auth-err" });
+    } else if (error === "portal_mismatch") {
+      toast.error("Your account does not have access to this portal.", { id: "auth-err" });
+    }
+  }, [searchParams]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -42,25 +57,37 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    
+
     try {
       const result = await loginUser(trimmedEmail, password);
 
       if (!result.success) {
         throw new Error(result.error);
       }
-      
-      // Store access token and refresh token securely in localStorage
+
+      // Store tokens and sync Supabase client session
       if (result.session) {
         saveTokens(result.session);
+        try {
+          await supabase.auth.setSession({
+            access_token: result.session.access_token,
+            refresh_token: result.session.refresh_token,
+          });
+        } catch {
+          // session sync fallback
+        }
       }
 
       if (result.user) {
         localStorage.setItem("admin_user", JSON.stringify(result.user));
       }
 
+      await refreshUserContext();
       toast.success("Welcome back!");
-      router.push("/admin/applications");
+
+      const from = searchParams.get("from");
+      const targetUrl = from && from.startsWith("/admin") ? from : "/admin/home";
+      router.replace(targetUrl);
     } catch (error: unknown) {
       const err = error as Error;
       toast.error(err?.message || "Failed to log in.");
@@ -69,20 +96,10 @@ export default function LoginPage() {
     }
   };
 
-  useEffect(() => {
-    // Remove the body padding used for the fixed Navbar
-    const originalPadding = document.body.style.paddingTop;
-    document.body.style.paddingTop = "0px";
-    return () => {
-      document.body.style.paddingTop = originalPadding;
-    };
-  }, []);
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f4f8] p-2 sm:p-3 lg:p-4">
       {/* Main Container */}
       <div className="w-full max-w-[1536px] bg-white rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.08)] flex flex-col md:flex-row overflow-hidden min-h-[650px]">
-        
         {/* Left Section - Image/Banner */}
         <div className="relative w-full md:w-[50%] bg-[#081225] hidden md:block shrink-0">
           <Image
@@ -197,5 +214,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#f0f4f8]" />}>
+      <LoginForm />
+    </Suspense>
   );
 }

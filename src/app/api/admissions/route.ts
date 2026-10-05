@@ -4,70 +4,78 @@ import { pool } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-interface BranchRow {
-  collegeBranchId: number;
-  branchName: string;
-}
-
-interface CourseAdmissionRow {
-  collegeBranchId: number;
-  isAdmissionsOpen: boolean;
-  admissionFee: string | number;
-}
-
-interface PgCourseRow {
-  collegeBranchId: number;
+interface CourseRow {
+  collegeBranchId: string;
   courseName: string;
-  isAdmissionsOpen: boolean | null;
-  admissionFee: string | number | null;
+  courseCode: string;
+  educationName: string;
+  isAdmissionsOpen: boolean;
+  admissionFee: number;
+  isHidden: boolean;
 }
 
 export async function GET() {
-  const collegeId = 40; // Achievers Junior College
-
-  // 1. Fetch dynamically from Supabase REST Client over HTTPS (works in Vercel, serverless, and all networks)
+  // 1. Fetch dynamically from Supabase REST Client
   try {
     const [settingsRes, branchesRes, admissionsRes] = await Promise.all([
       supabase
         .from("college_admission_settings")
         .select("isAdmissionsOpen")
-        .eq("collegeId", collegeId)
         .is("deletedAt", null)
         .order("createdAt", { ascending: false })
         .limit(1),
       supabase
-        .from("college_branch")
-        .select("collegeBranchId, branchName")
-        .eq("collegeId", collegeId)
-        .is("deletedAt", null),
+        .from("college_branches")
+        .select(`
+          college_branch_id,
+          branchName,
+          branch_code,
+          is_Active,
+          college_educations (
+            educationName,
+            education_code
+          )
+        `)
+        .eq("is_deleted", false)
+        .order("createdAt", { ascending: true }),
       supabase
         .from("college_course_admissions")
-        .select("collegeBranchId, isAdmissionsOpen, admissionFee")
-        .eq("collegeId", collegeId)
+        .select("college_branch_id, isAdmissionsOpen, admissionFee, isHidden")
         .is("deletedAt", null),
     ]);
 
     const globalAdmissionsOpen =
       settingsRes.data && settingsRes.data.length > 0
         ? Boolean(settingsRes.data[0].isAdmissionsOpen)
-        : false;
-
-    const admMap = new Map<number, { isAdmissionsOpen: boolean; admissionFee: number }>();
-    ((admissionsRes.data || []) as CourseAdmissionRow[]).forEach((adm) => {
-      admMap.set(adm.collegeBranchId, {
-        isAdmissionsOpen: adm.isAdmissionsOpen ?? false,
-        admissionFee: adm.admissionFee ? parseFloat(String(adm.admissionFee)) : 0,
-      });
-    });
+        : true;
 
     if (branchesRes.data && branchesRes.data.length > 0) {
-      const courses = ((branchesRes.data || []) as BranchRow[]).map((branch) => {
-        const adm = admMap.get(branch.collegeBranchId);
+      const admMap = new Map<string, { isAdmissionsOpen: boolean; admissionFee: number; isHidden: boolean }>();
+      (admissionsRes.data || []).forEach((adm: any) => {
+        const key = adm.college_branch_id;
+        if (key) {
+          admMap.set(String(key), {
+            isAdmissionsOpen: adm.isAdmissionsOpen ?? false,
+            admissionFee: adm.admissionFee ? parseFloat(String(adm.admissionFee)) : 0,
+            isHidden: Boolean(adm.isHidden),
+          });
+        }
+      });
+
+      const courses: CourseRow[] = branchesRes.data.map((branch: any) => {
+        const adm = admMap.get(String(branch.college_branch_id));
+        const edu = Array.isArray(branch.college_educations)
+          ? branch.college_educations[0]
+          : branch.college_educations;
+
         return {
-          collegeBranchId: branch.collegeBranchId,
+          collegeBranchId: String(branch.college_branch_id),
           courseName: branch.branchName,
-          isAdmissionsOpen: adm ? adm.isAdmissionsOpen : false,
+          courseCode: branch.branch_code,
+          educationName: edu?.educationName || "Intermediate Education",
+          isAdmissionsOpen: adm ? adm.isAdmissionsOpen : true,
           admissionFee: adm ? adm.admissionFee : 0,
+          isHidden: adm ? adm.isHidden : false,
         };
       });
 
@@ -81,35 +89,45 @@ export async function GET() {
     console.warn("Supabase REST dynamic admissions fetch error, attempting direct pg.Pool:", supabaseErr);
   }
 
-  // 2. Direct pg.Pool fallback (only if custom DB is configured)
+  // 2. Direct pg.Pool query fallback
   if (process.env.DBHOSTNAME && process.env.DBPASSWORD) {
+    const client = await pool.connect();
     try {
-      const settingsResult = await pool.query(
+      const settingsResult = await client.query(
         `SELECT "isAdmissionsOpen" FROM "college_admission_settings" 
-         WHERE "collegeId" = $1 AND "deletedAt" IS NULL`,
-        [collegeId]
+         WHERE "deletedAt" IS NULL
+         ORDER BY "createdAt" DESC
+         LIMIT 1`
       );
 
-      const globalAdmissionsOpen = settingsResult.rows.length > 0 ? settingsResult.rows[0].isAdmissionsOpen : false;
+      const globalAdmissionsOpen =
+        settingsResult.rows.length > 0 ? settingsResult.rows[0].isAdmissionsOpen : true;
 
-      const coursesResult = await pool.query(
+      const coursesResult = await client.query(
         `SELECT 
-           cb."collegeBranchId",
-           cb."branchName" as "courseName",
+           b.college_branch_id as "collegeBranchId",
+           b."branchName" as "courseName",
+           b.branch_code as "courseCode",
+           e."educationName",
            cca."isAdmissionsOpen",
-           cca."admissionFee"
-         FROM "college_branch" cb
-         LEFT JOIN "college_course_admissions" cca 
-           ON cb."collegeBranchId" = cca."collegeBranchId" AND cca."deletedAt" IS NULL
-         WHERE cb."collegeId" = $1 AND cb."deletedAt" IS NULL`,
-        [collegeId]
+           cca."admissionFee",
+           cca."isHidden"
+         FROM public.college_branches b
+         JOIN public.college_educations e ON b.college_education_id = e.college_education_id
+         LEFT JOIN public.college_course_admissions cca 
+           ON cca.college_branch_id = b.college_branch_id AND cca."deletedAt" IS NULL
+         WHERE b.is_deleted = false AND e.is_deleted = false
+         ORDER BY b."createdAt" ASC`
       );
 
-      const courses = (coursesResult.rows as PgCourseRow[]).map((row) => ({
-        collegeBranchId: row.collegeBranchId,
+      const courses: CourseRow[] = coursesResult.rows.map((row: any) => ({
+        collegeBranchId: String(row.collegeBranchId),
         courseName: row.courseName,
-        isAdmissionsOpen: row.isAdmissionsOpen ?? false,
+        courseCode: row.courseCode,
+        educationName: row.educationName,
+        isAdmissionsOpen: row.isAdmissionsOpen ?? true,
         admissionFee: row.admissionFee ? parseFloat(String(row.admissionFee)) : 0,
+        isHidden: Boolean(row.isHidden),
       }));
 
       return NextResponse.json({
@@ -121,11 +139,14 @@ export async function GET() {
       const msg = error instanceof Error ? error.message : String(error);
       console.error("Error dynamically fetching admissions from DB:", msg);
       return NextResponse.json({ success: false, error: msg }, { status: 500 });
+    } finally {
+      client.release();
     }
   }
 
   return NextResponse.json({
     success: false,
-    error: "Admissions data could not be fetched from Supabase.",
+    error: "Admissions data could not be fetched from database.",
   }, { status: 500 });
 }
+

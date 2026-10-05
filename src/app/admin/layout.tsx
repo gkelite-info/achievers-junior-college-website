@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useRef, Fragment } from "react";
 import Link from "next/link";
 import { Dialog, Transition } from "@headlessui/react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   House,
   FileText,
@@ -20,9 +20,10 @@ import {
   IdentificationCard,
 } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
-import { clearTokens } from "@/lib/helpers/authentication/tokenStorage";
 import { supabase } from "@/lib/supabaseClient";
-import { getAdminAuthUserById } from "@/lib/helpers/admin/adminAuthUsersHelper";
+import { NavbarActionsShimmer } from "@/app/admin/components/Shimmers";
+import { AdminLoadingProvider, useAdminLoading } from "./context/AdminLoadingContext";
+import { useUser } from "@/context/UserContext";
 
 type NavItem = {
   name: string;
@@ -32,45 +33,42 @@ type NavItem = {
 };
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AdminLoadingProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminLoadingProvider>
+  );
+}
+
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isPageLoading } = useAdminLoading();
+  const { user: adminProfile, loading: isUserLoading, logout } = useUser();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [appCount, setAppCount] = useState<number | string>("42");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [isNavbarLoading, setIsNavbarLoading] = useState(true);
 
-  const [adminProfile, setAdminProfile] = useState<{
-    firstName?: string;
-    lastName?: string;
-    role?: string;
-    email?: string;
-  } | null>(null);
+  const isProfileShimmering = isUserLoading || isPageLoading || isNavbarLoading;
+
+  // Keep the navbar skeleton visible long enough to be perceived even when
+  // the cached profile and page data resolve immediately.
+  useEffect(() => {
+    const showTimer = window.setTimeout(() => setIsNavbarLoading(true), 0);
+    const hideTimer = window.setTimeout(() => setIsNavbarLoading(false), 700);
+    return () => {
+      window.clearTimeout(showTimer);
+      window.clearTimeout(hideTimer);
+    };
+  }, [pathname, searchParams]);
 
   useEffect(() => {
-    async function fetchAdminProfile() {
-      try {
-        const stored = localStorage.getItem("admin_user");
-        if (stored) {
-          const user = JSON.parse(stored);
-          setAdminProfile(user); // Initial fallback fast render
-          
-          const userId = user?.authUserId || user?.id;
-          if (userId) {
-            const data = await getAdminAuthUserById(userId);
-            if (data) {
-              setAdminProfile(data); // update with full data from db
-            }
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-    fetchAdminProfile();
-
-    // Try fetching actual count of applications
+    // Fetch live application count
     async function fetchCount() {
       try {
         const { count } = await supabase
@@ -81,7 +79,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           setAppCount(count);
         }
       } catch {
-        // fallback to 42
+        // fallback to default
       }
     }
     fetchCount();
@@ -89,21 +87,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   const navItems: NavItem[] = [
     { name: "Dashboard", href: "/admin/home", icon: House },
-    { name: "Registration", href: "/admin/registration", icon: IdentificationCard },
     { name: "Applications", href: "/admin/applications", icon: FileText, badge: appCount },
     { name: "Gallery", href: "/admin/gallery", icon: ImageIcon },
-    { name: "Payments", href: "/admin/payments", icon: CreditCard },
+    { name: "Fee & Payments", href: "/admin/payments", icon: CreditCard },
     { name: "Reviews & Stories", href: "/admin/reviews", icon: ChatCircleText, badge: 24 },
   ];
-
-  // Remove the fixed website navbar body padding when in the admin portal
-  useEffect(() => {
-    const originalPadding = document.body.style.paddingTop;
-    document.body.style.paddingTop = "0px";
-    return () => {
-      document.body.style.paddingTop = originalPadding;
-    };
-  }, []);
 
   // Close profile dropdown when clicking outside
   useEffect(() => {
@@ -116,14 +104,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const executeLogout = () => {
+  const executeLogout = async () => {
     setLogoutModalOpen(false);
-    clearTokens();
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("admin_user");
-    }
-    toast.success("Logged out successfully");
-    router.push("/login");
+    await logout();
   };
 
   const handleLogout = () => {
@@ -155,9 +138,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </span>
             <span className="text-[#FFA401] font-semibold text-xs tracking-wider uppercase leading-tight mt-1">
               JUNIOR COLLEGE
-            </span>
-            <span className="text-slate-400 text-[10px] font-normal tracking-normal leading-tight mt-1 truncate max-w-[140px]">
-              {adminProfile?.email || "admin@achievers.in"}
             </span>
           </div>
         </div>
@@ -216,17 +196,38 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </Link>
             );
           })}
-        </nav>
 
-        {/* Bottom Section: Profile & Logout */}
-        <div className="p-4 border-t border-slate-800/80 space-y-1">
+          {/* Section Header: ACCOUNT MANAGEMENT */}
+          <div className="px-2 pt-4 pb-1">
+            <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+              ACCOUNT MANAGEMENT
+            </p>
+          </div>
+
           <Link
             href="/admin/profile"
-            className="flex items-center gap-3.5 w-full px-4 py-2.5 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] rounded-xl transition-all"
+            className={`relative flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all group ${
+              pathname.startsWith("/admin/profile")
+                ? "bg-[#252233] text-white shadow-md font-semibold"
+                : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+            }`}
           >
-            <User size={18} />
-            <span>Profile</span>
+            {pathname.startsWith("/admin/profile") && (
+              <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#FFA401] rounded-r-full" />
+            )}
+            <User
+              size={20}
+              weight={pathname.startsWith("/admin/profile") ? "fill" : "regular"}
+              className={`transition-colors shrink-0 ${
+                pathname.startsWith("/admin/profile") ? "text-[#FFA401]" : "text-slate-400 group-hover:text-white"
+              }`}
+            />
+            <span className="truncate">Admin Settings</span>
           </Link>
+        </nav>
+
+        {/* Bottom Section: Logout */}
+        <div className="p-4 border-t border-slate-800/80">
           <button
             onClick={handleLogout}
             className="flex items-center gap-3.5 w-full px-4 py-2.5 text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
@@ -332,35 +333,40 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <List size={22} />
             </button>
-
-
           </div>
 
           {/* Right Header Icons & Profile */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          {isProfileShimmering ? (
+            <NavbarActionsShimmer />
+          ) : (
+            <div className="flex items-center gap-3 sm:gap-4">
+              {/* Notification Bell */}
+              <div className="relative text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
+                <Bell size={20} />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FFA401] rounded-full ring-2 ring-white" />
+              </div>
 
-
-            {/* Profile Dropdown */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-2 p-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer select-none"
-                aria-label="User menu"
-              >
-                <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center shrink-0">
-                  {adminProfile?.firstName?.charAt(0)?.toUpperCase() || "A"}
-                  {adminProfile?.lastName?.charAt(0)?.toUpperCase() || "D"}
-                </div>
-                <span className="hidden sm:inline text-xs sm:text-sm font-medium text-gray-800">
-                  {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
-                </span>
-                <CaretDown
-                  size={13}
-                  className={`text-gray-400 transition-transform ${
-                    profileDropdownOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
+              {/* Profile Dropdown */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className="flex items-center gap-2 p-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer select-none"
+                  aria-label="User menu"
+                >
+                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center shrink-0">
+                    {adminProfile?.firstName?.charAt(0)?.toUpperCase() || "A"}
+                    {adminProfile?.lastName?.charAt(0)?.toUpperCase() || "D"}
+                  </div>
+                  <span className="hidden sm:inline text-xs sm:text-sm font-medium text-gray-800">
+                    {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
+                  </span>
+                  <CaretDown
+                    size={13}
+                    className={`text-gray-400 transition-transform ${
+                      profileDropdownOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
 
               {/* Profile Dropdown Menu */}
               {profileDropdownOpen && (
@@ -389,8 +395,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   </button>
                 </div>
               )}
+              </div>
             </div>
-          </div>
+          )}
         </header>
 
         {/* MAIN SCROLLABLE CONTENT */}

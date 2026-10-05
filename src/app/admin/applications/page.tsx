@@ -5,22 +5,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import CourseAdmissions from "./components/CourseAdmissions";
 import AdmissionFee from "./components/AdmissionFee";
 import AdmissionApplications from "./components/AdmissionApplications";
+import { useAdminLoading } from "@/app/admin/context/AdminLoadingContext";
 
 type AdmissionsTab = "courses" | "fees" | "applications";
 
 function ApplicationsScreenShimmer() {
   return (
-    <div className="min-h-screen space-y-6 bg-[#f8fafc] p-6 animate-pulse">
+    <div className="min-h-screen space-y-6 bg-[#f8fafc] p-6">
       <div className="space-y-2">
-        <div className="h-7 w-64 rounded-lg bg-gray-200" />
-        <div className="h-4 w-96 max-w-full rounded bg-gray-200" />
+        <div className="h-7 w-64 rounded-lg shimmer" />
+        <div className="h-4 w-96 max-w-full rounded shimmer" />
       </div>
-      <div className="mx-auto h-12 w-[520px] max-w-full rounded-full bg-white border border-gray-200" />
+      <div className="mx-auto h-12 w-[520px] max-w-full rounded-full border border-gray-200 shimmer" />
       <div className="min-h-[500px] space-y-5 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-        <div className="h-9 w-60 rounded bg-gray-100" />
+        <div className="h-9 w-60 rounded shimmer" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="h-36 rounded-2xl bg-gray-100" />
+            <div key={i} className="h-36 rounded-2xl border border-gray-100 shimmer" />
           ))}
         </div>
       </div>
@@ -31,6 +32,7 @@ function ApplicationsScreenShimmer() {
 function ApplicationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { triggerTabShimmer } = useAdminLoading();
   const tabParam = searchParams.get("tab") as AdmissionsTab | null;
   const activeTab: AdmissionsTab =
     tabParam && ["courses", "fees", "applications"].includes(tabParam)
@@ -38,6 +40,7 @@ function ApplicationsContent() {
       : "courses";
 
   const handleTabChange = (tab: AdmissionsTab) => {
+    triggerTabShimmer(500);
     router.replace(`?tab=${tab}`, { scroll: false });
   };
 

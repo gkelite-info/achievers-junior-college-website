@@ -12,6 +12,9 @@ import {
   CollegeEducation,
   CollegeBranch,
 } from "@/lib/helpers/admin/collegeRegistrationHelper";
+import { TableShimmer, RegistrationPageShimmer } from "@/app/admin/components/Shimmers";
+import { Pagination } from "@/app/admin/components/Pagination";
+import { useAdminLoading } from "@/app/admin/context/AdminLoadingContext";
 
 /**
  * Validates and formats input value:
@@ -63,6 +66,7 @@ function handleKeyDownLettersOnly(e: React.KeyboardEvent<HTMLInputElement>) {
 }
 
 export default function RegistrationPage() {
+  const { setIsPageLoading } = useAdminLoading();
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [savedEducations, setSavedEducations] = useState<CollegeEducation[]>([]);
   const [educationName, setEducationName] = useState("");
@@ -80,6 +84,24 @@ export default function RegistrationPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sync page loading state with top navbar & profile
+  useEffect(() => {
+    setIsPageLoading(isLoading);
+    return () => setIsPageLoading(false);
+  }, [isLoading, setIsPageLoading]);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(5);
+
+  // Keep currentPage within valid bounds when branchesList length or itemsPerPage changes
+  useEffect(() => {
+    const totalPages = Math.ceil(branchesList.length / itemsPerPage) || 1;
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [branchesList.length, itemsPerPage, currentPage]);
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -245,6 +267,9 @@ export default function RegistrationPage() {
     };
 
     setBranchesList((prev) => [...prev, tempBranch]);
+    const nextTotal = branchesList.length + 1;
+    const targetPage = Math.ceil(nextTotal / itemsPerPage);
+    setCurrentPage(targetPage);
 
     // Add education to saved options if not already present
     if (
@@ -420,6 +445,13 @@ export default function RegistrationPage() {
     }
   };
 
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedBranches = branchesList.slice(startIndex, startIndex + itemsPerPage);
+
+  if (isLoading) {
+    return <RegistrationPageShimmer />;
+  }
+
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300">
       {/* Header section */}
@@ -583,67 +615,85 @@ export default function RegistrationPage() {
               <span>Added Branches ({branchesList.length})</span>
             </h3>
           </div>
-          <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50/75 text-gray-600 font-semibold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-4">#</th>
-                  <th className="py-3 px-4">Education Name</th>
-                  <th className="py-3 px-4">Education Code</th>
-                  <th className="py-3 px-4">Branch Name</th>
-                  <th className="py-3 px-4">Branch Code</th>
-                  <th className="py-3 px-4 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
-                {branchesList.map((branch, index) => (
-                  <tr key={branch.college_branch_id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="py-3 px-4 text-gray-400">{index + 1}</td>
-                    <td className="py-3 px-4 font-semibold text-gray-900">{branch.educationName}</td>
-                    <td className="py-3 px-4 text-gray-700">{branch.education_code}</td>
-                    <td className="py-3 px-4 text-gray-700">{branch.branchName}</td>
-                    <td className="py-3 px-4 text-gray-700">{branch.branch_code}</td>
-                    <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEditBranch(branch)}
-                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition cursor-pointer"
-                          title="Edit branch"
-                        >
-                          <PencilSimple size={16} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveBranch(branch)}
-                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
-                          title="Delete branch"
-                        >
-                          <Trash size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {branchesList.length === 0 && !isLoading && (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-400">
-                      No branches added yet. Enter details above and click Add.
-                    </td>
-                  </tr>
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            {isLoading ? (
+              <TableShimmer />
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50/75 text-gray-600 font-semibold uppercase tracking-wider text-[11px]">
+                        <th className="py-3 px-4">#</th>
+                        <th className="py-3 px-4">Education Name</th>
+                        <th className="py-3 px-4">Education Code</th>
+                        <th className="py-3 px-4">Branch Name</th>
+                        <th className="py-3 px-4">Branch Code</th>
+                        <th className="py-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 font-medium text-gray-800">
+                      {paginatedBranches.map((branch, index) => (
+                        <tr key={branch.college_branch_id} className="hover:bg-gray-50/60 transition-colors">
+                          <td className="py-3 px-4 text-gray-400">{startIndex + index + 1}</td>
+                          <td className="py-3 px-4 font-semibold text-gray-900">{branch.educationName}</td>
+                          <td className="py-3 px-4 text-gray-700">{branch.education_code}</td>
+                          <td className="py-3 px-4 text-gray-700">{branch.branchName}</td>
+                          <td className="py-3 px-4 text-gray-700">{branch.branch_code}</td>
+                          <td className="py-3 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleEditBranch(branch)}
+                                className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition cursor-pointer"
+                                title="Edit branch"
+                              >
+                                <PencilSimple size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveBranch(branch)}
+                                className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 transition cursor-pointer"
+                                title="Delete branch"
+                              >
+                                <Trash size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {branchesList.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-gray-500">
+                            <div className="flex flex-col items-center justify-center gap-1.5 py-4">
+                              <span className="text-sm font-semibold text-gray-700">No data available</span>
+                              <span className="text-xs text-gray-400">
+                                No branches added yet. Enter details above and click Add.
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {branchesList.length > 0 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalItems={branchesList.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPage}
+                    itemsPerPageOptions={[5, 10, 20, 50]}
+                    onItemsPerPageChange={(val) => {
+                      setItemsPerPage(val);
+                      setCurrentPage(1);
+                    }}
+                    alwaysShow
+                  />
                 )}
-                {isLoading && (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-gray-400">
-                      <div className="flex items-center justify-center gap-2">
-                        <SpinnerGap size={18} className="animate-spin text-gray-500" />
-                        <span>Loading branches...</span>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+              </>
+            )}
           </div>
         </div>
 

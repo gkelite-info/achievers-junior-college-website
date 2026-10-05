@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -58,8 +58,17 @@ export default function ApplyModal() {
         
         <div className="p-6 overflow-y-auto">
           {isLoading && (
-            <div className="flex justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0047A9]"></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="flex flex-col items-center justify-center p-6 rounded-2xl border border-gray-100 gap-3 min-h-[170px] shimmer"
+                >
+                  <div className="h-6 w-3/4 rounded-lg bg-gray-200/70" />
+                  <div className="h-5 w-28 rounded-full bg-gray-200/70" />
+                  <div className="h-4 w-20 rounded bg-gray-200/70" />
+                </div>
+              ))}
             </div>
           )}
 
@@ -70,50 +79,77 @@ export default function ApplyModal() {
             </div>
           )}
 
-          {data && (
+          {!isLoading && data && (
             <div className="space-y-4">
-              {!data.globalAdmissionsOpen && (
-                <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-start gap-3 mb-6">
-                  <WarningCircle size={20} className="mt-0.5 shrink-0" weight="fill" />
-                  <p className="text-[14px] font-medium">Admissions are currently closed for all courses.</p>
-                </div>
-              )}
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {data.courses.map((course) => {
-                  const isOpen = data.globalAdmissionsOpen && course.isAdmissionsOpen;
-                  return (
-                    <button
-                      key={course.collegeBranchId}
-                      onClick={() => handleCourseClick(course.courseName, isOpen, course.admissionFee)}
-                      disabled={!isOpen}
-                      className={`relative flex flex-col items-center justify-center p-6 rounded-xl border-2 transition-all duration-200 ${
-                        isOpen 
-                          ? "border-[#e1e9f2] bg-white hover:border-[#0047A9] hover:shadow-md cursor-pointer group"
-                          : "border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed"
-                      }`}
-                    >
-                      <span className={`text-[20px] font-bold mb-2 text-center ${isOpen ? "text-[#081D36] group-hover:text-[#0047A9]" : "text-gray-400"}`}>
-                        {course.courseName}
-                      </span>
-                      
-                      <span className={`px-3 py-1 text-[12px] font-bold rounded-full ${
-                        isOpen
-                          ? "bg-green-100 text-green-700"
-                          : "bg-red-100 text-red-600"
-                      }`}>
-                        {isOpen ? "Admissions Open" : "Admissions Closed"}
-                      </span>
+              {(() => {
+                const visibleCourses = data.courses.filter((course) => !course.isHidden);
 
-                      {isOpen && course.admissionFee > 0 && (
-                        <span className="mt-3 text-[13px] text-[#424654] font-medium">
-                          Fee: ₹{course.admissionFee}
-                        </span>
-                      )}
-                    </button>
+                if (visibleCourses.length === 0) {
+                  return (
+                    <div className="py-16 text-center text-gray-500 font-medium">
+                      No data available
+                    </div>
                   );
-                })}
-              </div>
+                }
+
+                const allClosed = visibleCourses.every((c) => !c.isAdmissionsOpen);
+
+                return (
+                  <>
+                    {allClosed && (
+                      <div className="p-4 bg-red-50 text-red-600 rounded-xl flex items-start gap-3 mb-6">
+                        <WarningCircle size={20} className="mt-0.5 shrink-0" weight="fill" />
+                        <p className="text-[14px] font-medium">Admissions are currently closed for all courses.</p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {visibleCourses.map((course) => {
+                        const isOpen = course.isAdmissionsOpen;
+
+                      return (
+                        <button
+                          key={course.collegeBranchId}
+                          onClick={() => handleCourseClick(course.courseName, isOpen, course.admissionFee)}
+                          disabled={!isOpen}
+                          className={`relative flex flex-col items-center justify-center p-6 rounded-2xl border transition-all duration-200 text-center ${
+                            isOpen
+                              ? "border-[#dbeafe] bg-white hover:border-[#0047A9] hover:shadow-md cursor-pointer group"
+                              : "border-gray-100 bg-gray-50/80 cursor-not-allowed opacity-80"
+                          }`}
+                        >
+                          <span
+                            className={`text-[20px] font-bold leading-snug mb-2 ${
+                              isOpen
+                                ? "text-[#081D36] group-hover:text-[#0047A9] transition-colors"
+                                : "text-[#94a3b8]"
+                            }`}
+                          >
+                            {course.courseName}
+                          </span>
+
+                          <span
+                            className={`px-3.5 py-1 text-[12px] font-bold rounded-full ${
+                              isOpen
+                                ? "bg-[#dcfce7] text-[#15803d]"
+                                : "bg-[#fee2e2] text-[#ef4444]"
+                            }`}
+                          >
+                            {isOpen ? "Admissions Open" : "Admissions Closed"}
+                          </span>
+
+                          {isOpen && course.admissionFee > 0 && (
+                            <span className="mt-3 text-[14px] text-[#475569] font-medium">
+                              Fee: ₹{course.admissionFee}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+                );
+              })()}
             </div>
           )}
         </div>

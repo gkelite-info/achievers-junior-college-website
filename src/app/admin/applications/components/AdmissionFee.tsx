@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
+import { Dialog, Transition } from "@headlessui/react";
 import {
   CurrencyInr,
   PencilSimple,
   Check,
   SpinnerGap,
+  X,
 } from "@phosphor-icons/react";
 import {
   fetchAdmissionsCourses,
@@ -15,14 +17,15 @@ import {
 } from "@/lib/helpers/admin/admissionsAdminAPI";
 import { CourseCardShimmer } from "@/app/admin/components/Shimmers";
 import { Pagination } from "@/app/admin/components/Pagination";
+import { useAdminLoading } from "@/app/admin/context/AdminLoadingContext";
 import toast from "react-hot-toast";
 
 export default function AdmissionFee() {
-  const collegeId = 40;
-  const adminId = 36;
+  const adminId = "a12334e7-ecc8-44a3-803b-9935c10caafa";
+  const { isPageLoading } = useAdminLoading();
   const [courses, setCourses] = useState<AdminBranch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [feeState, setFeeState] = useState<Record<number, number>>({});
+  const [feeState, setFeeState] = useState<Record<string, number>>({});
 
   // Global fee state
   const [globalFee, setGlobalFee] = useState<number>(0);
@@ -30,8 +33,16 @@ export default function AdmissionFee() {
   const [savingGlobal, setSavingGlobal] = useState(false);
 
   // Individual fee inline edit state
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [savingId, setSavingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Confirmation modal states
+  const [confirmFeeModal, setConfirmFeeModal] = useState<{
+    course: AdminBranch;
+    newAmount: number;
+  } | null>(null);
+
+  const [confirmGlobalFeeModal, setConfirmGlobalFeeModal] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
@@ -39,13 +50,13 @@ export default function AdmissionFee() {
   const loadData = async () => {
     try {
       const [branches, courseSettings] = await Promise.all([
-        fetchAdmissionsCourses(collegeId),
-        fetchCourseAdmissions(collegeId),
+        fetchAdmissionsCourses(),
+        fetchCourseAdmissions(),
       ]);
 
       setCourses(branches);
 
-      const initialFee: Record<number, number> = {};
+      const initialFee: Record<string, number> = {};
       branches.forEach((b) => {
         initialFee[b.collegeBranchId] = 0;
       });
@@ -69,47 +80,69 @@ export default function AdmissionFee() {
     loadData();
   }, []);
 
-  const handleUpdateAmount = (id: number, amount: number) => {
+  const handleUpdateAmount = (id: string, amount: number) => {
     setFeeState((prev) => ({ ...prev, [id]: amount }));
   };
 
-  const handleSaveFee = async (id: number) => {
-    setSavingId(id);
-    const amount = feeState[id] ?? 0;
+  // Trigger modal before saving course fee
+  const promptSaveCourseFee = (course: AdminBranch) => {
+    const amount = feeState[course.collegeBranchId] ?? 0;
+    setConfirmFeeModal({ course, newAmount: amount });
+  };
+
+  // Execute course fee save after confirmation
+  const executeSaveFee = async () => {
+    if (!confirmFeeModal) return;
+    const { course, newAmount } = confirmFeeModal;
+    const id = course.collegeBranchId;
+    setIsProcessing(true);
 
     try {
-      await upsertCourseAdmissionConfig(collegeId, adminId, id, { admissionFee: amount });
+      await upsertCourseAdmissionConfig(id, { admissionFee: newAmount }, adminId);
       setEditingId(null);
-      toast.success("Course admission fee updated.");
+      setConfirmFeeModal(null);
+      toast.success(
+        `Admission fee for ${course.name} updated to ₹ ${newAmount.toLocaleString("en-IN")}.`
+      );
     } catch (error) {
       console.error("Error saving fee:", error);
       toast.error("Failed to update admission fee.");
     } finally {
-      setSavingId(null);
+      setIsProcessing(false);
     }
   };
 
-  const handleSaveGlobalFee = async () => {
+  // Trigger modal before applying global fee
+  const promptSaveGlobalFee = () => {
+    setConfirmGlobalFeeModal(true);
+  };
+
+  // Execute global fee save after confirmation
+  const executeSaveGlobalFee = async () => {
+    setIsProcessing(true);
     setSavingGlobal(true);
+    setConfirmGlobalFeeModal(false);
+
     try {
-      const updatedState: Record<number, number> = {};
+      const updatedState: Record<string, number> = {};
       courses.forEach((c) => {
         updatedState[c.collegeBranchId] = globalFee;
       });
       setFeeState(updatedState);
 
       const coursePromises = courses.map((course) =>
-        upsertCourseAdmissionConfig(collegeId, adminId, course.collegeBranchId, {
-          admissionFee: globalFee,
-        })
+        upsertCourseAdmissionConfig(course.collegeBranchId, { admissionFee: globalFee }, adminId)
       );
       await Promise.all(coursePromises);
       setIsEditingGlobal(false);
-      toast.success("Global admission fee applied to all courses!");
+      toast.success(
+        `Global admission fee of ₹ ${globalFee.toLocaleString("en-IN")} applied to all courses!`
+      );
     } catch (error) {
       console.error("Error saving global fee:", error);
       toast.error("Failed to update all courses.");
     } finally {
+      setIsProcessing(false);
       setSavingGlobal(false);
     }
   };
@@ -147,8 +180,8 @@ export default function AdmissionFee() {
                 />
               </div>
               <button
-                onClick={handleSaveGlobalFee}
-                disabled={savingGlobal || globalFee < 0}
+                onClick={promptSaveGlobalFee}
+                disabled={isProcessing || savingGlobal || globalFee < 0}
                 className="flex min-w-[110px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#0E1528] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[#1a2542] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {savingGlobal ? (
@@ -188,9 +221,9 @@ export default function AdmissionFee() {
       </div>
 
       {/* Course Fee Cards Grid */}
-      {loading ? (
+      {loading || isPageLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {[1, 2, 3].map((i) => (
+          {[1, 2, 3, 4, 5, 6].map((i) => (
             <CourseCardShimmer key={i} />
           ))}
         </div>
@@ -221,16 +254,12 @@ export default function AdmissionFee() {
                     <label className="text-xs font-medium text-gray-500">Fee Amount (INR)</label>
                     {isEditing ? (
                       <button
-                        onClick={() => handleSaveFee(course.collegeBranchId)}
-                        disabled={savingId === course.collegeBranchId}
+                        onClick={() => promptSaveCourseFee(course)}
+                        disabled={isProcessing}
                         className="cursor-pointer rounded-lg p-1.5 bg-[#0E1528]/10 text-[#0E1528] hover:bg-[#0E1528]/20 transition-colors"
                         title="Save fee"
                       >
-                        {savingId === course.collegeBranchId ? (
-                          <SpinnerGap size={16} className="animate-spin" />
-                        ) : (
-                          <Check size={16} weight="bold" />
-                        )}
+                        <Check size={16} weight="bold" />
                       </button>
                     ) : (
                       <button
@@ -254,6 +283,12 @@ export default function AdmissionFee() {
                         onChange={(e) =>
                           handleUpdateAmount(course.collegeBranchId, Number(e.target.value))
                         }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            promptSaveCourseFee(course);
+                          }
+                        }}
                         placeholder="0"
                         min="0"
                         autoFocus
@@ -271,15 +306,15 @@ export default function AdmissionFee() {
           })}
 
           {paginatedCourses.length === 0 && (
-            <div className="col-span-full py-12 text-center text-gray-500 border-2 border-dashed border-gray-200 rounded-2xl">
-              No courses configured for Achievers Junior College.
+            <div className="col-span-full py-16 text-center text-gray-500 border-2 border-dashed border-gray-200 rounded-2xl font-medium">
+              No data available
             </div>
           )}
         </div>
       )}
 
       {/* Pagination */}
-      {!loading && courses.length > 0 && (
+      {!(loading || isPageLoading) && courses.length > 0 && (
         <div className="mt-2">
           <Pagination
             currentPage={currentPage}
@@ -291,6 +326,199 @@ export default function AdmissionFee() {
           />
         </div>
       )}
+
+      {/* 1. Course Admission Fee Confirmation Modal */}
+      <Transition appear show={!!confirmFeeModal} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-[10000]"
+          onClose={() => !isProcessing && setConfirmFeeModal(null)}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="relative w-full max-w-[420px] transform overflow-hidden rounded-[24px] bg-white p-6 sm:p-8 text-center shadow-2xl transition-all border border-gray-100">
+                  <button
+                    onClick={() => setConfirmFeeModal(null)}
+                    disabled={isProcessing}
+                    className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg cursor-pointer disabled:opacity-50"
+                    aria-label="Close"
+                  >
+                    <X size={18} weight="bold" />
+                  </button>
+
+                  {/* Centered Circular Icon */}
+                  <div className="w-14 h-14 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] flex items-center justify-center mx-auto mb-4">
+                    <CurrencyInr size={26} weight="bold" />
+                  </div>
+
+                  <Dialog.Title
+                    as="h3"
+                    className="text-[20px] font-bold text-[#111827] text-center mb-2"
+                  >
+                    Save Course Fee?
+                  </Dialog.Title>
+
+                  <p className="text-[13.5px] text-[#64748B] text-center max-w-[310px] mx-auto leading-relaxed mb-6">
+                    {confirmFeeModal && (
+                      <>
+                        Set admission fee for{" "}
+                        <strong className="text-gray-800">
+                          {confirmFeeModal.course.name} (
+                          {confirmFeeModal.course.code})
+                        </strong>{" "}
+                        to{" "}
+                        <strong className="text-[#0E1528] font-bold">
+                          ₹ {confirmFeeModal.newAmount.toLocaleString("en-IN")}
+                        </strong>
+                        ?
+                      </>
+                    )}
+                  </p>
+
+                  <div className="flex items-center justify-center gap-3 mt-2">
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      className="flex-1 py-2.5 px-4 rounded-xl border border-[#D0D5DD] bg-white hover:bg-gray-50 text-[14px] font-semibold text-[#344054] transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                      onClick={() => setConfirmFeeModal(null)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#0E1528] hover:bg-slate-800 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                      onClick={executeSaveFee}
+                    >
+                      {isProcessing ? (
+                        <SpinnerGap size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          <Check size={16} weight="bold" />
+                          <span>Confirm & Save</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
+
+      {/* 2. Global Admission Fee Confirmation Modal */}
+      <Transition appear show={confirmGlobalFeeModal} as={Fragment}>
+        <Dialog
+          as="div"
+          className="relative z-[10000]"
+          onClose={() => !isProcessing && setConfirmGlobalFeeModal(false)}
+        >
+          <Transition.Child
+            as={Fragment}
+            enter="ease-out duration-200"
+            enterFrom="opacity-0"
+            enterTo="opacity-100"
+            leave="ease-in duration-150"
+            leaveFrom="opacity-100"
+            leaveTo="opacity-0"
+          >
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          </Transition.Child>
+
+          <div className="fixed inset-0 overflow-y-auto">
+            <div className="flex min-h-full items-center justify-center p-4 text-center">
+              <Transition.Child
+                as={Fragment}
+                enter="ease-out duration-300"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="ease-in duration-200"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+              >
+                <Dialog.Panel className="relative w-full max-w-[420px] transform overflow-hidden rounded-[24px] bg-white p-6 sm:p-8 text-center shadow-2xl transition-all border border-gray-100">
+                  <button
+                    onClick={() => setConfirmGlobalFeeModal(false)}
+                    disabled={isProcessing}
+                    className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg cursor-pointer disabled:opacity-50"
+                    aria-label="Close"
+                  >
+                    <X size={18} weight="bold" />
+                  </button>
+
+                  {/* Centered Circular Icon */}
+                  <div className="w-14 h-14 rounded-full bg-[#ECFDF5] border border-[#A7F3D0] text-[#059669] flex items-center justify-center mx-auto mb-4">
+                    <CurrencyInr size={26} weight="bold" />
+                  </div>
+
+                  <Dialog.Title
+                    as="h3"
+                    className="text-[20px] font-bold text-[#111827] text-center mb-2"
+                  >
+                    Apply Global Fee?
+                  </Dialog.Title>
+
+                  <p className="text-[13.5px] text-[#64748B] text-center max-w-[310px] mx-auto leading-relaxed mb-6">
+                    This will set the admission fee to{" "}
+                    <strong className="text-[#0E1528] font-bold">
+                      ₹ {globalFee.toLocaleString("en-IN")}
+                    </strong>{" "}
+                    for <strong className="text-gray-800">ALL courses</strong> simultaneously.
+                  </p>
+
+                  <div className="flex items-center justify-center gap-3 mt-2">
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      className="flex-1 py-2.5 px-4 rounded-xl border border-[#D0D5DD] bg-white hover:bg-gray-50 text-[14px] font-semibold text-[#344054] transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                      onClick={() => setConfirmGlobalFeeModal(false)}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isProcessing}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#0E1528] hover:bg-slate-800 text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer disabled:opacity-50"
+                      onClick={executeSaveGlobalFee}
+                    >
+                      {isProcessing ? (
+                        <SpinnerGap size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          <Check size={16} weight="bold" />
+                          <span>Apply to All</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </Dialog.Panel>
+              </Transition.Child>
+            </div>
+          </div>
+        </Dialog>
+      </Transition>
     </div>
   );
 }

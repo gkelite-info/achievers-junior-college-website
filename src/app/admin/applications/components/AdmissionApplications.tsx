@@ -41,6 +41,23 @@ import { Pagination } from "@/app/admin/components/Pagination";
 import { ApplicationsOverviewShimmer, TableShimmer } from "@/app/admin/components/Shimmers";
 import toast from "react-hot-toast";
 
+interface CollegeEducationItem {
+  college_education_id: string;
+  educationName: string;
+  education_code: string;
+  is_Active?: boolean;
+}
+
+interface CollegeBranchItem {
+  college_branch_id: string;
+  branchName: string;
+  branch_code: string;
+  college_education_id: string;
+  educationName?: string;
+  education_code?: string;
+  is_Active?: boolean;
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState<T>(value);
   useEffect(() => {
@@ -500,6 +517,18 @@ export default function AdmissionApplications() {
   const [percentageTo, setPercentageTo] = useState("");
   const [applicationTab, setApplicationTab] = useState<"all" | "top">("all");
 
+  // Dynamic Educations and Courses (Branches)
+  const [educations, setEducations] = useState<CollegeEducationItem[]>([
+    {
+      college_education_id: "8f3505c8-696f-4d6a-adcd-df559b1720c0",
+      educationName: "Intermediate Education",
+      education_code: "Inter",
+    },
+  ]);
+  const [branches, setBranches] = useState<CollegeBranchItem[]>([]);
+  const [selectedEducationId, setSelectedEducationId] = useState<string>("8f3505c8-696f-4d6a-adcd-df559b1720c0");
+  const [educationsLoading, setEducationsLoading] = useState<boolean>(true);
+
   const PERCENTAGE_STEPS = [35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100];
 
   // Dynamic Percentage To options (e.g. if 70% selected, shows 75%, 80%, 85%, 90%, 95%, 100%)
@@ -608,6 +637,46 @@ export default function AdmissionApplications() {
     };
   }, [refreshTrigger]);
 
+  // Load Dynamic Educations and Branches from DB
+  useEffect(() => {
+    let isMounted = true;
+    async function loadEducationsAndBranches() {
+      try {
+        const res = await fetch("/api/admin/college-branches", { cache: "no-store" });
+        const json = await res.json();
+        if (isMounted && json.success) {
+          if (Array.isArray(json.educations) && json.educations.length > 0) {
+            setEducations(json.educations);
+            setSelectedEducationId((prev) => {
+              if (prev && json.educations.some((e: any) => e.college_education_id === prev)) {
+                return prev;
+              }
+              return json.educations[0].college_education_id;
+            });
+          }
+          if (Array.isArray(json.branches)) {
+            setBranches(json.branches);
+          }
+        }
+      } catch (err) {
+        console.error("Failed loading educations and branches:", err);
+      } finally {
+        if (isMounted) setEducationsLoading(false);
+      }
+    }
+    loadEducationsAndBranches();
+    return () => {
+      isMounted = false;
+    };
+  }, [refreshTrigger]);
+
+  // Active branches for selected education
+  const activeBranches = useMemo(() => {
+    if (!selectedEducationId) return branches;
+    const filtered = branches.filter((b) => b.college_education_id === selectedEducationId);
+    return filtered.length > 0 ? filtered : branches;
+  }, [branches, selectedEducationId]);
+
   // Real-time subscriptions
   useEffect(() => {
     const handleUpdate = () => {
@@ -661,7 +730,53 @@ export default function AdmissionApplications() {
       }
 
       if (courseFilter !== "All") {
-        if (!app.course.toLowerCase().includes(courseFilter.toLowerCase())) return false;
+        const filterLower = courseFilter.toLowerCase().trim();
+        const appCourseLower = (app.course || "").toLowerCase();
+        const rawCourseLower = (String(app.raw?.course || "")).toLowerCase();
+
+        // 1. Direct match with branch code or course text
+        const directMatch =
+          appCourseLower.includes(filterLower) ||
+          rawCourseLower.includes(filterLower);
+
+        if (!directMatch) {
+          // 2. Dynamic match using branch metadata from DB
+          const matchedBranch = branches.find(
+            (b) => b.branch_code?.toLowerCase() === filterLower
+          );
+          if (matchedBranch) {
+            const bName = matchedBranch.branchName.toLowerCase();
+            const bCode = matchedBranch.branch_code.toLowerCase();
+            const nameMatch = appCourseLower.includes(bName) || rawCourseLower.includes(bName);
+
+            let keywordMatch = false;
+            if (bCode === "bipc") {
+              keywordMatch =
+                (appCourseLower.includes("biolog") && appCourseLower.includes("chem")) ||
+                (rawCourseLower.includes("biolog") && rawCourseLower.includes("chem"));
+            } else if (bCode === "mpc") {
+              keywordMatch =
+                (appCourseLower.includes("math") && appCourseLower.includes("phys")) ||
+                (rawCourseLower.includes("math") && rawCourseLower.includes("phys"));
+            } else if (bCode === "cec") {
+              keywordMatch =
+                appCourseLower.includes("commer") ||
+                appCourseLower.includes("civic") ||
+                rawCourseLower.includes("commer") ||
+                rawCourseLower.includes("civic");
+            } else if (bCode === "mec") {
+              keywordMatch =
+                (appCourseLower.includes("math") && appCourseLower.includes("econom")) ||
+                (rawCourseLower.includes("math") && rawCourseLower.includes("econom"));
+            }
+
+            if (!nameMatch && !keywordMatch) {
+              return false;
+            }
+          } else {
+            return false;
+          }
+        }
       }
 
       if (paymentFilter !== "All") {
@@ -691,6 +806,7 @@ export default function AdmissionApplications() {
     dateFrom,
     dateTo,
     courseFilter,
+    branches,
     paymentFilter,
     admissionFilter,
     percentageFrom,
@@ -825,35 +941,97 @@ export default function AdmissionApplications() {
           </div>
         </div>
 
-        {/* Top Applications Course Filter Card */}
-        {applicationTab === "top" && (
-          <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
-            <div className="border-b border-gray-100 pb-2">
-              <span className="text-sm font-bold text-[#2563EB] border-b-2 border-[#2563EB] pb-2 px-1">
-                Inter
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {["All", "BIPC", "CEC", "MPC"].map((cName) => (
-                <button
-                  key={cName}
-                  type="button"
-                  onClick={() => {
-                    setCourseFilter(cName);
-                    setCurrentPage(1);
-                  }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
-                    courseFilter === cName
-                      ? "bg-[#2563EB] text-white shadow-sm"
-                      : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {cName}
-                </button>
-              ))}
-            </div>
+        {/* Course Filter Card */}
+        <div className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm space-y-3">
+          {/* Education Tabs */}
+          <div className="border-b border-gray-100 pb-2 flex items-center gap-4">
+            {educationsLoading && educations.length === 0 ? (
+              <div className="h-5 w-16 rounded shimmer" />
+            ) : (
+              educations.map((edu) => {
+                const isSelected = selectedEducationId === edu.college_education_id;
+                return (
+                  <button
+                    key={edu.college_education_id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEducationId(edu.college_education_id);
+                      setCourseFilter("All");
+                      setCurrentPage(1);
+                    }}
+                    className={`text-sm font-bold pb-2 px-1 transition cursor-pointer border-b-2 ${
+                      isSelected
+                        ? "text-[#0E1528] border-[#0E1528]"
+                        : "text-gray-400 border-transparent hover:text-gray-700"
+                    }`}
+                  >
+                    {edu.education_code || edu.educationName}
+                  </button>
+                );
+              })
+            )}
           </div>
-        )}
+
+          {/* Dynamic Courses / Branches Pills */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setCourseFilter("All");
+                setCurrentPage(1);
+              }}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
+                courseFilter === "All"
+                  ? "bg-[#0E1528] text-white shadow-sm"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              All
+            </button>
+            {activeBranches.length > 0
+              ? activeBranches.map((branch) => {
+                  const code = branch.branch_code;
+                  const isSelected = courseFilter.toLowerCase() === code.toLowerCase();
+                  return (
+                    <button
+                      key={branch.college_branch_id}
+                      type="button"
+                      onClick={() => {
+                        setCourseFilter(code);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
+                        isSelected
+                          ? "bg-[#0E1528] text-white shadow-sm"
+                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  );
+                })
+              : ["BiPC", "CEC", "MEC", "MPC"].map((code) => {
+                  const isSelected = courseFilter.toLowerCase() === code.toLowerCase();
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => {
+                        setCourseFilter(code);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-4 py-1.5 rounded-full text-xs font-semibold transition cursor-pointer ${
+                        isSelected
+                          ? "bg-[#0E1528] text-white shadow-sm"
+                          : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                      }`}
+                    >
+                      {code}
+                    </button>
+                  );
+                })}
+          </div>
+        </div>
 
 
         {/* Filters Card */}

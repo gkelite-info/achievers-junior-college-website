@@ -14,27 +14,29 @@ try {
 }
 
 export type AdminBranch = {
-  collegeBranchId: number;
+  collegeBranchId: string;
   name: string;
   code: string;
+  educationName?: string;
+  educationCode?: string;
+  isHidden?: boolean;
 };
 
 export type GlobalAdmissionSetting = {
   collegeAdmissionSettingsId: number;
-  collegeId: number;
   isAdmissionsOpen: boolean;
-  createdBy?: number;
+  createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
 };
 
 export type CourseAdmissionSetting = {
   courseAdmissionId: number;
-  collegeId: number;
-  collegeBranchId: number;
+  collegeBranchId: string;
   isAdmissionsOpen: boolean;
   admissionFee: number;
-  createdBy?: number;
+  isHidden?: boolean;
+  createdBy?: string;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -53,13 +55,12 @@ export function deriveBranchCode(branchName: string): string {
 }
 
 /**
- * Fetches global admission settings for a college
+ * Fetches global admission settings
  */
-export async function fetchGlobalAdmissionSettings(collegeId = 40): Promise<GlobalAdmissionSetting | null> {
+export async function fetchGlobalAdmissionSettings(): Promise<GlobalAdmissionSetting | null> {
   const { data, error } = await supabase
     .from("college_admission_settings")
     .select("*")
-    .eq("collegeId", collegeId)
     .is("deletedAt", null)
     .order("createdAt", { ascending: false })
     .limit(1)
@@ -76,11 +77,10 @@ export async function fetchGlobalAdmissionSettings(collegeId = 40): Promise<Glob
 /**
  * Fetches the course admissions configurations
  */
-export async function fetchCourseAdmissions(collegeId = 40): Promise<CourseAdmissionSetting[]> {
+export async function fetchCourseAdmissions(): Promise<CourseAdmissionSetting[]> {
   const { data, error } = await supabase
     .from("college_course_admissions")
     .select("*")
-    .eq("collegeId", collegeId)
     .is("deletedAt", null);
 
   if (error) {
@@ -90,42 +90,71 @@ export async function fetchCourseAdmissions(collegeId = 40): Promise<CourseAdmis
 
   return (data || []).map((row) => ({
     ...row,
+    collegeBranchId: String(row.college_branch_id),
     admissionFee: typeof row.admissionFee === "string" ? parseFloat(row.admissionFee) : Number(row.admissionFee || 0),
+    isHidden: Boolean(row.isHidden),
   }));
 }
 
 /**
- * Fetches the branches (courses) for Achievers
+ * Fetches the branches (courses) for Achievers from college_branches and college_educations
  */
 export async function fetchAdmissionsCourses(collegeId = 40): Promise<AdminBranch[]> {
-  const { data, error } = await supabase
-    .from("college_branch")
-    .select("collegeBranchId, branchName, deletedAt")
-    .eq("collegeId", collegeId)
-    .is("deletedAt", null)
-    .order("collegeBranchId", { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from("college_branches")
+      .select(`
+        college_branch_id,
+        branchName,
+        branch_code,
+        college_educations (
+          educationName,
+          education_code
+        )
+      `)
+      .eq("is_deleted", false)
+      .order("createdAt", { ascending: true });
 
-  if (error) {
-    console.error("Error fetching admissions courses from college_branch:", error);
+    if (error || !data || data.length === 0) {
+      // Fallback via API endpoint
+      const res = await fetch("/api/admin/college-branches", { cache: "no-store" });
+      const json = await res.json();
+      if (json.success && json.branches && json.branches.length > 0) {
+        return json.branches.map((b: any) => ({
+          collegeBranchId: b.college_branch_id,
+          name: b.branchName,
+          code: b.branch_code || deriveBranchCode(b.branchName),
+          educationName: b.educationName,
+          educationCode: b.education_code,
+        }));
+      }
+      return [];
+    }
+
+    return data.map((b: any) => {
+      const edu = Array.isArray(b.college_educations) ? b.college_educations[0] : b.college_educations;
+      return {
+        collegeBranchId: b.college_branch_id,
+        name: b.branchName,
+        code: b.branch_code || deriveBranchCode(b.branchName),
+        educationName: edu?.educationName || "",
+        educationCode: edu?.education_code || "",
+      };
+    });
+  } catch (err) {
+    console.error("fetchAdmissionsCourses error:", err);
     return [];
   }
-
-  return (data || []).map((b) => ({
-    collegeBranchId: b.collegeBranchId,
-    name: b.branchName,
-    code: deriveBranchCode(b.branchName),
-  }));
 }
 
 /**
  * Upsert global admissions settings
  */
 export async function upsertGlobalAdmissionsStatus(
-  collegeId = 40,
-  adminId = 36,
-  isOpen: boolean
+  isOpen: boolean,
+  adminId: string = "a12334e7-ecc8-44a3-803b-9935c10caafa"
 ) {
-  const existing = await fetchGlobalAdmissionSettings(collegeId);
+  const existing = await fetchGlobalAdmissionSettings();
   const now = new Date().toISOString();
 
   let result;
@@ -142,7 +171,6 @@ export async function upsertGlobalAdmissionsStatus(
     const { data, error } = await supabase
       .from("college_admission_settings")
       .insert({
-        collegeId,
         isAdmissionsOpen: isOpen,
         createdBy: adminId,
         createdAt: now,
@@ -154,37 +182,6 @@ export async function upsertGlobalAdmissionsStatus(
     result = data;
   }
 
-  // Also sync to CollPoll database if client is available
-  if (collpollClient) {
-    try {
-      const { data: cpExisting } = await collpollClient
-        .from("college_admission_settings")
-        .select("collegeAdmissionSettingsId")
-        .eq("collegeId", collegeId)
-        .is("deletedAt", null)
-        .maybeSingle();
-
-      if (cpExisting) {
-        await collpollClient
-          .from("college_admission_settings")
-          .update({ isAdmissionsOpen: isOpen, updatedAt: now })
-          .eq("collegeAdmissionSettingsId", cpExisting.collegeAdmissionSettingsId);
-      } else {
-        await collpollClient
-          .from("college_admission_settings")
-          .insert({
-            collegeId,
-            isAdmissionsOpen: isOpen,
-            createdBy: adminId,
-            createdAt: now,
-            updatedAt: now,
-          });
-      }
-    } catch (err) {
-      console.warn("CollPoll sync skipped for global status:", err);
-    }
-  }
-
   return result;
 }
 
@@ -192,16 +189,14 @@ export async function upsertGlobalAdmissionsStatus(
  * Upsert course admission status or fee
  */
 export async function upsertCourseAdmissionConfig(
-  collegeId = 40,
-  adminId = 36,
-  collegeBranchId: number,
-  updates: { isAdmissionsOpen?: boolean; admissionFee?: number }
+  collegeBranchId: string,
+  updates: { isAdmissionsOpen?: boolean; admissionFee?: number; isHidden?: boolean },
+  adminId: string = "a12334e7-ecc8-44a3-803b-9935c10caafa"
 ) {
   const { data: existing } = await supabase
     .from("college_course_admissions")
     .select("*")
-    .eq("collegeId", collegeId)
-    .eq("collegeBranchId", collegeBranchId)
+    .eq("college_branch_id", collegeBranchId)
     .is("deletedAt", null)
     .maybeSingle();
 
@@ -212,6 +207,7 @@ export async function upsertCourseAdmissionConfig(
     const payload: any = { updatedAt: now };
     if (updates.isAdmissionsOpen !== undefined) payload.isAdmissionsOpen = updates.isAdmissionsOpen;
     if (updates.admissionFee !== undefined) payload.admissionFee = updates.admissionFee;
+    if (updates.isHidden !== undefined) payload.isHidden = updates.isHidden;
 
     const { data, error } = await supabase
       .from("college_course_admissions")
@@ -225,10 +221,10 @@ export async function upsertCourseAdmissionConfig(
     const { data, error } = await supabase
       .from("college_course_admissions")
       .insert({
-        collegeId,
-        collegeBranchId,
+        college_branch_id: collegeBranchId,
         isAdmissionsOpen: updates.isAdmissionsOpen ?? false,
         admissionFee: updates.admissionFee ?? 0,
+        isHidden: updates.isHidden ?? false,
         createdBy: adminId,
         createdAt: now,
         updatedAt: now,
@@ -237,44 +233,6 @@ export async function upsertCourseAdmissionConfig(
 
     if (error) throw error;
     result = data;
-  }
-
-  // Also sync to CollPoll database if available
-  if (collpollClient) {
-    try {
-      const payload: any = { updatedAt: now };
-      if (updates.isAdmissionsOpen !== undefined) payload.isAdmissionsOpen = updates.isAdmissionsOpen;
-      if (updates.admissionFee !== undefined) payload.admissionFee = updates.admissionFee;
-
-      const { data: cpExisting } = await collpollClient
-        .from("college_course_admissions")
-        .select("courseAdmissionId")
-        .eq("collegeId", collegeId)
-        .eq("collegeBranchId", collegeBranchId)
-        .is("deletedAt", null)
-        .maybeSingle();
-
-      if (cpExisting) {
-        await collpollClient
-          .from("college_course_admissions")
-          .update(payload)
-          .eq("courseAdmissionId", cpExisting.courseAdmissionId);
-      } else {
-        await collpollClient
-          .from("college_course_admissions")
-          .insert({
-            collegeId,
-            collegeBranchId,
-            isAdmissionsOpen: updates.isAdmissionsOpen ?? false,
-            admissionFee: updates.admissionFee ?? 0,
-            createdBy: adminId,
-            createdAt: now,
-            updatedAt: now,
-          });
-      }
-    } catch (err) {
-      console.warn("CollPoll sync skipped for course admission config:", err);
-    }
   }
 
   return result;

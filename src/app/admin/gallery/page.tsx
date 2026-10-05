@@ -163,6 +163,7 @@ export default function AdminGalleryPage() {
 
   // Modal States
   const [imageToDelete, setImageToDelete] = useState<GalleryItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [previewImage, setPreviewImage] = useState<GalleryItem | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(true);
 
@@ -216,37 +217,44 @@ export default function AdminGalleryPage() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
     const category = uploadCategory as CategoryType;
-    const reader = new FileReader();
-
     setIsUploading(true);
 
-    reader.onload = async (event) => {
-      const result = event.target?.result as string;
-      const today = new Date();
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const formattedDate = `${monthNames[today.getMonth()]} ${String(today.getDate()).padStart(2, "0")}, ${today.getFullYear()}`;
-      
-      const tempId = `temp-${Date.now()}`;
-      const title = file.name.replace(/\.[^/.]+$/, "") || "New Upload";
+    const fileArray = Array.from(files);
+    let successCount = 0;
 
-      const tempImage: GalleryItem = {
-        id: tempId,
-        title,
-        category,
-        image: result,
-        date: formattedDate,
-        timestamp: Date.now(),
-        isUploading: true,
-      };
-
-      setImages((prev) => [tempImage, ...prev]);
-
+    for (const file of fileArray) {
       try {
+        const result = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+
+        const today = new Date();
+        const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        const formattedDate = `${monthNames[today.getMonth()]} ${String(today.getDate()).padStart(2, "0")}, ${today.getFullYear()}`;
+        
+        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const title = file.name.replace(/\.[^/.]+$/, "") || "New Upload";
+
+        const tempImage: GalleryItem = {
+          id: tempId,
+          title,
+          category,
+          image: result,
+          date: formattedDate,
+          timestamp: Date.now(),
+          isUploading: true,
+        };
+
+        setImages((prev) => [tempImage, ...prev]);
+
         const storagePath = `gallery/${category.replace(/\s+/g, '-')}/${Date.now()}-${file.name.replace(/\s+/g, '-')}`;
         
         // 1. Upload file directly to Supabase Storage
@@ -276,7 +284,7 @@ export default function AdminGalleryPage() {
           file_size: file.size,
           mime_type: file.type,
           createdBy: user?.authUserId,
-          display_order: images.length,
+          display_order: 0,
         });
 
         const newImage: GalleryItem = {
@@ -288,11 +296,13 @@ export default function AdminGalleryPage() {
           timestamp: new Date(uploaded.createdAt).getTime(),
         };
 
-        if (activeCategory === "All" || activeCategory === category) {
-          setImages((prev) => [newImage, ...prev.filter(img => img.id !== tempId)]);
-        } else {
-          setImages((prev) => prev.filter(img => img.id !== tempId));
-        }
+        setImages((prev) => {
+          const filtered = prev.filter((img) => img.id !== tempId);
+          if (activeCategory === "All" || activeCategory === category) {
+            return [newImage, ...filtered];
+          }
+          return filtered;
+        });
 
         const countKey = category === "Student Life" ? "studentLife" : category.toLowerCase() as "infrastructure" | "studentLife" | "excellence" | "other";
         setCategoryCounts((prev) => ({
@@ -301,23 +311,38 @@ export default function AdminGalleryPage() {
           [countKey]: (prev[countKey] || 0) + 1,
         }));
 
-        setUploadCategory("");
-        if (fileInputRef.current) fileInputRef.current.value = "";
-        toast.success(`Image added to ${category} successfully!`);
+        successCount++;
       } catch (err) {
-        setImages((prev) => prev.filter(img => img.id !== tempId));
-        toast.error("Failed to upload image. Please try again.");
-      } finally {
-        setIsUploading(false);
+        console.error("Failed to upload image:", err);
       }
-    };
+    }
 
-    reader.readAsDataURL(file);
+    if (successCount > 0) {
+      toast.success(`${successCount} image(s) added to ${category} successfully!`);
+      // Notify website tabs immediately in real-time
+      if (typeof window !== "undefined") {
+        try {
+          const bc = new BroadcastChannel("gallery_realtime_sync");
+          bc.postMessage({ type: "GALLERY_UPDATED", timestamp: Date.now() });
+          bc.close();
+        } catch (e) {}
+        try {
+          localStorage.setItem("gallery_realtime_timestamp", Date.now().toString());
+        } catch (e) {}
+      }
+    } else {
+      toast.error("Failed to upload images. Please try again.");
+    }
+
+    setUploadCategory("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    setIsUploading(false);
   };
 
   // Confirm Delete
   const handleConfirmDelete = async () => {
     if (!imageToDelete) return;
+    setIsDeleting(true);
     try {
       await deleteGalleryImage(imageToDelete.id);
       setImages((prev) => prev.filter((img) => img.id !== imageToDelete.id));
@@ -330,8 +355,22 @@ export default function AdminGalleryPage() {
       }));
       toast.success(`Removed photo from ${imageToDelete.category}.`);
       setImageToDelete(null);
+
+      // Notify website tabs immediately in real-time
+      if (typeof window !== "undefined") {
+        try {
+          const bc = new BroadcastChannel("gallery_realtime_sync");
+          bc.postMessage({ type: "GALLERY_DELETED", timestamp: Date.now() });
+          bc.close();
+        } catch (e) {}
+        try {
+          localStorage.setItem("gallery_realtime_timestamp", Date.now().toString());
+        } catch (e) {}
+      }
     } catch (err) {
       toast.error("Failed to delete image.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -348,7 +387,7 @@ export default function AdminGalleryPage() {
           Gallery Management
         </h1>
         <p className="text-[13.5px] text-[#64748B] mt-1 max-w-3xl">
-          View and manage all images uploaded by students. You can also upload new images to showcase on the website.
+          Upload and manage images to showcase on the college website.
         </p>
       </div>
 
@@ -419,7 +458,7 @@ export default function AdminGalleryPage() {
               type="text"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              placeholder="Search images..."
+              placeholder="Search images by category..."
               className="w-full pl-9 pr-8 py-2 rounded-xl border border-gray-200 bg-white text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 shadow-xs transition-colors"
             />
             {searchInput && (
@@ -459,6 +498,7 @@ export default function AdminGalleryPage() {
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -692,11 +732,21 @@ export default function AdminGalleryPage() {
                     </button>
                     <button
                       type="button"
-                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer"
+                      disabled={isDeleting}
+                      className="flex-1 py-2.5 px-4 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white text-[14px] font-semibold flex items-center justify-center gap-2 transition-colors shadow-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={handleConfirmDelete}
                     >
-                      <Trash size={16} weight="bold" />
-                      <span>Delete Photo</span>
+                      {isDeleting ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash size={16} weight="bold" />
+                          <span>Delete Photo</span>
+                        </>
+                      )}
                     </button>
                   </div>
                 </Dialog.Panel>

@@ -6,13 +6,13 @@ import {
   X,
   Eye,
   Image as ImageIcon,
-  MagnifyingGlass,
   CaretLeft,
   CaretRight,
   CaretDown,
   CheckCircle,
 } from "@phosphor-icons/react";
 import { GalleryCategory, GalleryImageOutput, fetchGalleryImages } from "../../../../lib/helpers/galleryAPI";
+import { supabase } from "@/lib/supabaseClient";
 
 // Fallback initial "Other" category images for Image-2 (Experience Life at Achievers)
 const INITIAL_OTHER_IMAGES: GalleryImageOutput[] = [
@@ -159,14 +159,13 @@ export default function GalleryGrid() {
     ...INITIAL_OTHER_IMAGES,
   ]);
   const [activeCategory, setActiveCategory] = useState("All");
-  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH_SIZE);
+  const [isCategoryLoading, setIsCategoryLoading] = useState(false);
 
   // Lightbox Modal State
   const [lightboxImage, setLightboxImage] = useState<GalleryImageOutput | null>(null);
 
-  // Fetch images from API on mount
+  // Fetch images from API on mount and subscribe to realtime updates
   useEffect(() => {
     let isMounted = true;
 
@@ -184,9 +183,98 @@ export default function GalleryGrid() {
       }
     }
 
-    loadImages();
+    // Initial load with shimmer
+    setIsLoading(true);
+    loadImages().finally(() => {
+      if (isMounted) setIsLoading(false);
+    });
+
+    // 1. Supabase Realtime WebSocket Subscription (with unique channel name)
+    const channelId = `gallery_rt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'gallery_images' },
+        (payload) => {
+          console.log("Supabase Realtime event received:", payload);
+
+          if (payload.eventType === 'INSERT' && payload.new) {
+            const newImg = payload.new as GalleryImageOutput;
+            if (newImg.is_Active !== false && !newImg.is_deleted) {
+              setAllImages((prev) => {
+                const exists = prev.some((img) => img.gallery_image_id === newImg.gallery_image_id);
+                if (exists) return prev;
+                return [newImg, ...prev];
+              });
+            }
+          } else if (payload.eventType === 'DELETE' && payload.old) {
+            const oldId = (payload.old as any).gallery_image_id;
+            if (oldId) {
+              setAllImages((prev) => prev.filter((img) => img.gallery_image_id !== oldId));
+            }
+          } else if (payload.eventType === 'UPDATE' && payload.new) {
+            const updated = payload.new as GalleryImageOutput;
+            if (updated.is_deleted || updated.is_Active === false) {
+              setAllImages((prev) => prev.filter((img) => img.gallery_image_id !== updated.gallery_image_id));
+            } else {
+              setAllImages((prev) =>
+                prev.map((img) => (img.gallery_image_id === updated.gallery_image_id ? updated : img))
+              );
+            }
+          }
+
+          // Fetch fresh list from server to ensure perfect sync
+          loadImages();
+        }
+      )
+      .subscribe((status) => {
+        console.log("Gallery Realtime subscription status:", status);
+      });
+
+    // 2. Cross-tab BroadcastChannel sync (triggers 0ms instantly when admin uploads/deletes)
+    let broadcastChannel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        broadcastChannel = new BroadcastChannel("gallery_realtime_sync");
+        broadcastChannel.onmessage = () => {
+          loadImages();
+        };
+      } catch (e) {
+        console.error("BroadcastChannel error:", e);
+      }
+    }
+
+    // 3. Storage event fallback for cross-tab sync
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "gallery_realtime_timestamp") {
+        loadImages();
+      }
+    };
+    window.addEventListener("storage", handleStorageChange);
+
+    // 4. Window Focus & Tab Visibility Change (re-syncs immediately when switching back to tab)
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        loadImages();
+      }
+    };
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+
+    // 5. Automatic periodic background re-sync (every 3 seconds)
+    const autoSyncInterval = setInterval(() => {
+      loadImages();
+    }, 3000);
+
     return () => {
       isMounted = false;
+      clearInterval(autoSyncInterval);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      if (broadcastChannel) broadcastChannel.close();
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -204,31 +292,9 @@ export default function GalleryGrid() {
   // Filtered images for Image-1
   const filteredImages = useMemo(() => {
     return categoryImages.filter((img) => {
-      const matchesCategory =
-        activeCategory === "All" || img.category?.toLowerCase() === activeCategory.toLowerCase();
-
-      const query = searchQuery.trim().toLowerCase();
-      const matchesSearch =
-        !query ||
-        (img.title && img.title.toLowerCase().includes(query)) ||
-        (img.category && img.category.toLowerCase().includes(query));
-
-      return matchesCategory && matchesSearch;
+      return activeCategory === "All" || img.category?.toLowerCase() === activeCategory.toLowerCase();
     });
-  }, [categoryImages, activeCategory, searchQuery]);
-
-  // Reset visible count when category or search changes
-  useEffect(() => {
-    setVisibleCount(INITIAL_BATCH_SIZE);
-  }, [activeCategory, searchQuery]);
-
-  // Displayed images slice for progressive reveal
-  const displayedImages = useMemo(() => {
-    return filteredImages.slice(0, visibleCount);
-  }, [filteredImages, visibleCount]);
-
-  const hasMore = visibleCount < filteredImages.length;
-  const progressPercent = Math.min(100, Math.round((displayedImages.length / (filteredImages.length || 1)) * 100));
+  }, [categoryImages, activeCategory]);
 
   // Count per category (for Image-1 categories)
   const getCategoryCount = (cat: string) => {
@@ -287,38 +353,54 @@ export default function GalleryGrid() {
         </div>
 
         {/* Other Category Images in Image-2 (Stable Box, Slight Moving Inside Box - NO Title) */}
-        <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6 mb-[56px] md:mb-[68px]">
-          {otherImages.map((image) => (
-            <div
-              key={image.gallery_image_id}
-              className="relative h-[340px] sm:h-[400px] md:h-[460px] w-full rounded-[20px] md:rounded-[24px] overflow-hidden group cursor-pointer shadow-md hover:shadow-2xl transition-all duration-500 border border-gray-100 bg-gray-900"
-              onClick={() => setLightboxImage(image)}
-            >
-              <div className="absolute inset-0 w-full h-full overflow-hidden">
-                <Image
-                  src={image.image_url}
-                  alt="Life at Achievers"
-                  fill
-                  className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
-                  sizes="(max-width: 768px) 100vw, 50vw"
-                  priority
+        <div className="max-h-[600px] md:max-h-[700px] overflow-y-auto pr-2 sm:pr-3 gallery-scroll mb-[56px] md:mb-[68px]">
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6 pb-2">
+              {[1, 2, 3].map((i) => (
+                <div
+                  key={i}
+                  className="relative aspect-[4/3] w-full rounded-[20px] overflow-hidden bg-slate-100 shimmer border border-gray-100 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
                 />
-              </div>
-
-              {/* Overlay with clean category badge (NO Title) */}
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0A1E37]/90 via-[#0A1E37]/20 to-transparent opacity-60 group-hover:opacity-100 transition-opacity duration-500 ease-in-out flex flex-col justify-end p-5 md:p-8">
-                <div className="transform translate-y-2 group-hover:translate-y-0 transition-all duration-500 ease-out flex items-center justify-between">
-                  <span className="inline-block px-3.5 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider bg-[#0A1E37]/80 text-[#FFA401] border border-[#FFA401]/30 backdrop-blur-md shadow-xs">
-                    Life at Achievers
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 hover:bg-black/70 transition-colors">
-                    <Eye size={15} weight="bold" />
-                    <span>View</span>
-                  </span>
-                </div>
-              </div>
+              ))}
             </div>
-          ))}
+          ) : (
+            <div className="w-full grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 md:gap-6 pb-2">
+              {otherImages.map((image) => (
+                <div
+                  key={image.gallery_image_id}
+                  className="group relative aspect-[4/3] w-full rounded-[20px] md:rounded-[24px] overflow-hidden cursor-pointer shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_32px_rgba(10,30,55,0.12)] transition-all duration-300 border border-gray-100 bg-gray-900"
+                  onClick={() => setLightboxImage(image)}
+                >
+                  <div className="absolute inset-0 w-full h-full overflow-hidden">
+                    <Image
+                      src={image.image_url}
+                      alt="Life at Achievers"
+                      fill
+                      className="object-cover transition-transform duration-700 ease-out group-hover:scale-105"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      priority
+                    />
+                  </div>
+
+                  {/* Clean Hover Overlay with Category Pill & View Button */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0A1E37]/85 via-[#0A1E37]/15 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-4 sm:p-5">
+                    <div className="flex justify-end">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-black/60 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 shadow-sm transform -translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                        <Eye size={14} weight="bold" />
+                        <span>View</span>
+                      </span>
+                    </div>
+
+                    <div className="transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
+                      <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-[#0A1E37]/85 text-[#FFA401] border border-[#FFA401]/30 backdrop-blur-md shadow-xs">
+                        LIFE AT ACHIEVERS
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ============================================================== */}
@@ -335,7 +417,11 @@ export default function GalleryGrid() {
               return (
                 <button
                   key={cat}
-                  onClick={() => setActiveCategory(cat)}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    setIsCategoryLoading(true);
+                    setTimeout(() => setIsCategoryLoading(false), 400);
+                  }}
                   className={`px-4 py-2 sm:px-5 sm:py-2.5 rounded-full font-sora font-semibold text-[13px] sm:text-[14px] transition-all duration-300 cursor-pointer flex items-center gap-2 ${
                     isActive
                       ? "bg-[#0A1E37] text-white shadow-md scale-105 ring-2 ring-[#0A1E37]/15"
@@ -354,41 +440,17 @@ export default function GalleryGrid() {
               );
             })}
           </div>
-
-          {/* Search Box */}
-          <div className="relative w-full md:w-72">
-            <MagnifyingGlass
-              size={16}
-              weight="bold"
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search campus photos..."
-              className="w-full pl-9 pr-8 py-2 rounded-full border border-gray-200 text-xs sm:text-sm text-[#0A1E37] placeholder-gray-400 focus:outline-none focus:border-[#0A1E37] focus:ring-1 focus:ring-[#0A1E37] transition-all bg-white"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
-              >
-                <X size={13} weight="bold" />
-              </button>
-            )}
-          </div>
         </div>
 
         {/* ============================================================== */}
         {/* VERTICAL SCROLL CONTAINER: Only images part will move, Not pills */}
         {/* ============================================================== */}
-        {isLoading ? (
+        {isLoading || isCategoryLoading ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <div
                 key={i}
-                className="relative aspect-[4/3] w-full rounded-2xl overflow-hidden bg-slate-100 animate-pulse border border-slate-200"
+                className="relative aspect-[4/3] w-full rounded-[20px] overflow-hidden bg-slate-100 shimmer border border-gray-100 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
               />
             ))}
           </div>
@@ -397,18 +459,8 @@ export default function GalleryGrid() {
             <ImageIcon size={44} className="mx-auto text-slate-400 mb-3" />
             <h4 className="text-base font-semibold text-slate-800">No photos found</h4>
             <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-              {searchQuery
-                ? `No images matched "${searchQuery}" in ${activeCategory}.`
-                : `There are currently no photos in the ${activeCategory} category.`}
+              {`There are currently no photos in the ${activeCategory} category.`}
             </p>
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="mt-4 px-4 py-2 rounded-xl bg-[#0A1E37] text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
-              >
-                Clear Search
-              </button>
-            )}
           </div>
         ) : (
           <div className="relative">
@@ -419,10 +471,10 @@ export default function GalleryGrid() {
                   <div
                     key={image.gallery_image_id}
                     onClick={() => setLightboxImage(image)}
-                    className="group relative aspect-[4/3] w-full rounded-2xl overflow-hidden border border-gray-100 bg-gray-50 shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_32px_rgba(10,30,55,0.12)] cursor-pointer transition-all duration-300"
+                    className="group relative aspect-[4/3] w-full rounded-[20px] overflow-hidden border border-gray-100 bg-gray-900 shadow-[0_4px_20px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_32px_rgba(10,30,55,0.12)] cursor-pointer transition-all duration-300"
                   >
-                    {/* Uniform Image with Fixed 4/3 Aspect Ratio & slight zoom inside box */}
-                    <div className="w-full h-full overflow-hidden">
+                    {/* Uniform Image with Aspect Ratio & slight zoom inside box */}
+                    <div className="absolute inset-0 w-full h-full overflow-hidden">
                       <Image
                         src={image.image_url}
                         alt={image.category}
@@ -452,18 +504,6 @@ export default function GalleryGrid() {
               </div>
             </div>
 
-            {/* Subtle Scroll Hint / Counter Footer */}
-            <div className="flex items-center justify-between pt-3 px-1 text-xs text-gray-500 font-medium border-t border-gray-100 mt-2">
-              <span>
-                Showing {filteredImages.length} {filteredImages.length === 1 ? "photo" : "photos"}
-              </span>
-              {filteredImages.length > 6 && (
-                <span className="text-[#0A1E37] font-medium flex items-center gap-1">
-                  <span>Scroll vertically for more</span>
-                  <CaretDown size={14} weight="bold" className="text-[#FFA401] animate-bounce" />
-                </span>
-              )}
-            </div>
           </div>
         )}
       </div>

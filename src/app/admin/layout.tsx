@@ -12,7 +12,6 @@ import {
   ChatCircleText,
   User,
   SignOut,
-  Bell,
   CaretDown,
   MagnifyingGlass,
   List,
@@ -340,11 +339,6 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             <NavbarActionsShimmer />
           ) : (
             <div className="flex items-center gap-3 sm:gap-4">
-              {/* Notification Bell */}
-              <div className="relative text-gray-500 hover:text-gray-700 p-2 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
-                <Bell size={20} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#FFA401] rounded-full ring-2 ring-white" />
-              </div>
 
               {/* Profile Dropdown */}
               <div className="relative" ref={dropdownRef}>

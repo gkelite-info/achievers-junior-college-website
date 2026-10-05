@@ -3,6 +3,9 @@ import { pool } from "@/lib/db";
 import { randomUUID } from "crypto";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -44,7 +47,16 @@ export async function GET(request: Request) {
     const result = await client.query(query, params);
     client.release();
     
-    return NextResponse.json({ success: true, data: result.rows });
+    return NextResponse.json(
+      { success: true, data: result.rows },
+      {
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      }
+    );
   } catch (error: any) {
     console.error("GET Gallery error:", error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

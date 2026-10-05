@@ -81,9 +81,6 @@ export function NavbarProfileShimmer() {
 export function NavbarActionsShimmer() {
   return (
     <div className="flex items-center gap-3 sm:gap-4" aria-hidden="true">
-      <div className="relative p-2">
-        <div className="h-5 w-5 rounded-md shimmer" />
-      </div>
       <NavbarProfileShimmer />
     </div>
   );

@@ -25,8 +25,15 @@ export async function fetchGalleryImages(category?: string): Promise<GalleryImag
   if (category && category !== "All") {
     url.searchParams.append("category", category);
   }
+  url.searchParams.append("t", Date.now().toString());
 
-  const response = await fetch(url.toString());
+  const response = await fetch(url.toString(), { 
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+    },
+  });
   if (!response.ok) {
     throw new Error("Failed to fetch gallery images");
   }

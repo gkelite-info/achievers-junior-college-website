@@ -9,7 +9,7 @@ export interface TestimonialCardProps {
 
 export default function TestimonialCard({ quote, name, role, avatar }: TestimonialCardProps) {
   return (
-    <div className="bg-[#FFFFFF] rounded-[16px] p-[32px] flex flex-col gap-[24px]">
+    <div className="bg-[#FFFFFF] rounded-[16px] p-[32px] flex flex-col gap-[24px] h-full justify-between">
       {/* Icon */}
       <div className="shrink-0 w-[32px] h-[32px] relative">
         <Image 
@@ -22,7 +22,7 @@ export default function TestimonialCard({ quote, name, role, avatar }: Testimoni
       
       {/* Quote */}
       <p className="text-[#464555] font-normal text-[16px] leading-[24px] grow">
-        {quote}
+        &ldquo;{quote}&rdquo;
       </p>
 
       {/* Profile */}

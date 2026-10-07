@@ -1,7 +1,9 @@
 export type ReviewItem = {
-  id: number;
+  id: number | string;
+  review_id?: string;
   initials: string;
   name: string;
+  email?: string | null;
   role?: string;
   date: string;
   text: string;

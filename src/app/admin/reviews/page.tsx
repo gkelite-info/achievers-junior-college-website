@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, Fragment } from "react";
+import React, { useState, useEffect, useMemo, Fragment } from "react";
 import Image from "next/image";
 import { Dialog, Transition } from "@headlessui/react";
 import {
@@ -17,150 +17,301 @@ import {
 } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 
-import { ReviewItem, INITIAL_REVIEWS } from "@/data/reviewsData";
+import { ReviewItem } from "@/data/reviewsData";
+import { Pagination } from "@/app/admin/components/Pagination";
+import { supabase } from "@/lib/supabaseClient";
+import {
+  fetchAdminAlumniReviews,
+  updateAlumniReviewVisibility,
+  deleteAlumniReview,
+} from "@/lib/helpers/alumniReviewsAPI";
+
+function cleanReviewText(text: string): string {
+  if (!text) return "";
+  let trimmed = text.trim();
+  while (trimmed.startsWith('"') || trimmed.startsWith('“') || trimmed.startsWith('”')) {
+    trimmed = trimmed.substring(1).trim();
+  }
+  while (trimmed.endsWith('"') || trimmed.endsWith('“') || trimmed.endsWith('”')) {
+    trimmed = trimmed.substring(0, trimmed.length - 1).trim();
+  }
+  return trimmed;
+}
 
 export default function AdminReviewsPage() {
-  const [reviews, setReviews] = useState<ReviewItem[]>(() => {
-    if (typeof window !== "undefined") {
-      try {
-        const stored = localStorage.getItem("achievers_admin_reviews");
-        if (stored) return JSON.parse(stored);
-      } catch {
-        // fallback
-      }
-    }
-    return INITIAL_REVIEWS;
-  });
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "visible" | "hidden">("all");
   const [sortOption, setSortOption] = useState<"newest" | "oldest" | "name">("newest");
+  const [stats, setStats] = useState({ total: 0, visible: 0, hidden: 0 });
 
-  // Modal States
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newText, setNewText] = useState("");
-  const [newPhotos, setNewPhotos] = useState<string[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  // Debounce search input by 300ms so we filter from DB without over-querying on each keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(6);
 
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
   const [reviewToDelete, setReviewToDelete] = useState<ReviewItem | null>(null);
   const [reviewToToggle, setReviewToToggle] = useState<ReviewItem | null>(null);
 
-  // Synchronize reviews to localStorage on changes
-  const saveReviews = (updated: ReviewItem[]) => {
-    setReviews(updated);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("achievers_admin_reviews", JSON.stringify(updated));
-    }
-  };
+  // Fetch reviews directly from DB with DB-side search, status filter, and sort
+  useEffect(() => {
+    let isMounted = true;
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setNewPhotos((prev) => [...prev, event.target!.result as string]);
+    async function loadReviews(isInitial = false) {
+      try {
+        if (isInitial) setIsLoading(true);
+        const result = await fetchAdminAlumniReviews({
+          search: debouncedSearch,
+          status: statusFilter,
+          sort: sortOption,
+        });
+
+        if (isMounted) {
+          const mapped: ReviewItem[] = result.reviews.map((r, index) => {
+            const imagesList: string[] = Array.isArray(r.images)
+              ? r.images
+              : typeof r.images === "string"
+              ? (() => {
+                  try {
+                    const parsed = JSON.parse(r.images);
+                    return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                    return [];
+                  }
+                })()
+              : [];
+
+            return {
+              id: r.review_id || index + 1,
+              review_id: r.review_id,
+              name: r.full_name,
+              email: r.email || null,
+              initials: r.full_name
+                .trim()
+                .split(/\s+/)
+                .map((part) => part[0])
+                .join("")
+                .substring(0, 2)
+                .toUpperCase(),
+              date: r.createdAt
+                ? new Date(r.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "2-digit",
+                    year: "numeric",
+                  })
+                : "Recent",
+              text: r.review_text,
+              isVisible: r.isVisible !== false,
+              photos: imagesList,
+            };
+          });
+          setReviews(mapped);
+          setStats(result.stats);
         }
-      };
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const handleAddReview = () => {
-    if (!newName.trim() || !newText.trim()) {
-      toast.error("Name and review text are required");
-      return;
+      } catch (err: any) {
+        console.error("Failed to load admin reviews:", err);
+        if (isMounted && isInitial) {
+          toast.error("Failed to load reviews from database");
+        }
+      } finally {
+        if (isMounted && isInitial) setIsLoading(false);
+      }
     }
 
-    const today = new Date();
-    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const formattedDate = `${monthNames[today.getMonth()]} ${String(today.getDate()).padStart(2, "0")}, ${today.getFullYear()}`;
+    // Trigger initial shimmer load or query directly from DB
+    loadReviews(isLoading && reviews.length === 0);
 
-    const newReview: ReviewItem = {
-      id: Date.now(),
-      initials: newName.split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase(),
-      name: newName,
-      date: formattedDate,
-      text: newText,
-      isVisible: true,
-      photos: newPhotos,
+    // 1. Supabase Realtime WebSocket Subscription
+    const channelId = `admin_reviews_rt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "alumni_reviews",
+        },
+        (payload) => {
+          console.log("[Admin Realtime] alumni_reviews change event:", payload);
+          loadReviews(false);
+        }
+      )
+      .subscribe((status) => {
+        console.log("[Admin Realtime] Channel status:", status);
+      });
+
+    // 2. BroadcastChannel for cross-tab sync
+    let broadcastChannel: BroadcastChannel | null = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        broadcastChannel = new BroadcastChannel("alumni_reviews_sync");
+        broadcastChannel.onmessage = () => {
+          loadReviews(false);
+        };
+      } catch (e) {
+        console.error("BroadcastChannel error:", e);
+      }
+    }
+
+    // 3. Storage event fallback for cross-tab sync
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "alumni_reviews_timestamp") {
+        loadReviews(false);
+      }
     };
+    window.addEventListener("storage", handleStorageChange);
 
-    saveReviews([newReview, ...reviews]);
-    toast.success("Review added successfully!");
-    setIsAddModalOpen(false);
-    setNewName("");
-    setNewText("");
-    setNewPhotos([]);
-  };
+    // 4. Tab Visibility & Focus re-sync
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "visible") {
+        loadReviews(false);
+      }
+    };
+    window.addEventListener("focus", handleVisibilityOrFocus);
+    document.addEventListener("visibilitychange", handleVisibilityOrFocus);
 
-  // Toggle visible / hidden confirmation
-  const handleConfirmToggle = () => {
+    return () => {
+      isMounted = false;
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("focus", handleVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      if (broadcastChannel) broadcastChannel.close();
+      supabase.removeChannel(channel);
+    };
+  }, [debouncedSearch, statusFilter, sortOption]);
+
+  // Toggle visible / hidden confirmation in database
+  const handleConfirmToggle = async () => {
     if (!reviewToToggle) return;
     const targetId = reviewToToggle.id;
-    const isCurrentlyVisible = reviewToToggle.isVisible;
-    const updated = reviews.map((r) => {
-      if (r.id === targetId) {
-        return { ...r, isVisible: !isCurrentlyVisible };
+    const reviewId = reviewToToggle.review_id || String(targetId);
+    const newVisibility = !reviewToToggle.isVisible;
+
+    let authUserId: string | null = null;
+    try {
+      const storedAdmin = localStorage.getItem("admin_user");
+      if (storedAdmin) {
+        const parsed = JSON.parse(storedAdmin);
+        authUserId = parsed.authUserId || parsed.id || null;
       }
-      return r;
-    });
-    saveReviews(updated);
-    toast.success(
-      isCurrentlyVisible
-        ? `Review by ${reviewToToggle.name} has been archived & hidden`
-        : `Review by ${reviewToToggle.name} is now live & visible`
-    );
-    setReviewToToggle(null);
+    } catch {}
+
+    setIsUpdating(true);
+    try {
+      await updateAlumniReviewVisibility(reviewId, newVisibility, authUserId);
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === targetId || r.review_id === reviewId
+            ? { ...r, isVisible: newVisibility }
+            : r
+        )
+      );
+      toast.success(
+        newVisibility
+          ? `Review by ${reviewToToggle.name} is now live & visible`
+          : `Review by ${reviewToToggle.name} has been archived & hidden`
+      );
+
+      // Broadcast update across open tabs
+      if (typeof window !== "undefined") {
+        try {
+          const bc = new BroadcastChannel("alumni_reviews_sync");
+          bc.postMessage({ type: "REVIEW_VISIBILITY_CHANGED", reviewId, isVisible: newVisibility });
+          bc.close();
+        } catch {}
+        localStorage.setItem("alumni_reviews_timestamp", Date.now().toString());
+      }
+    } catch (err: any) {
+      console.error("Error updating visibility:", err);
+      toast.error(err.message || "Failed to update review visibility");
+    } finally {
+      setIsUpdating(false);
+      setReviewToToggle(null);
+    }
   };
 
-  // Delete review confirmation
-  const handleConfirmDelete = () => {
+  // Delete review confirmation in database
+  const handleConfirmDelete = async () => {
     if (!reviewToDelete) return;
-    const updated = reviews.filter((r) => r.id !== reviewToDelete.id);
-    saveReviews(updated);
-    toast.success(`Deleted review by ${reviewToDelete.name}`);
-    setReviewToDelete(null);
+    const targetId = reviewToDelete.id;
+    const reviewId = reviewToDelete.review_id || String(targetId);
+
+    let authUserId: string | null = null;
+    try {
+      const storedAdmin = localStorage.getItem("admin_user");
+      if (storedAdmin) {
+        const parsed = JSON.parse(storedAdmin);
+        authUserId = parsed.authUserId || parsed.id || null;
+      }
+    } catch {}
+
+    setIsUpdating(true);
+    try {
+      await deleteAlumniReview(reviewId, authUserId);
+      setReviews((prev) =>
+        prev.filter((r) => r.id !== targetId && r.review_id !== reviewId)
+      );
+      toast.success(`Deleted review by ${reviewToDelete.name}`);
+
+      // Broadcast delete across open tabs
+      if (typeof window !== "undefined") {
+        try {
+          const bc = new BroadcastChannel("alumni_reviews_sync");
+          bc.postMessage({ type: "REVIEW_DELETED", reviewId });
+          bc.close();
+        } catch {}
+        localStorage.setItem("alumni_reviews_timestamp", Date.now().toString());
+      }
+    } catch (err: any) {
+      console.error("Error deleting review:", err);
+      toast.error(err.message || "Failed to delete review");
+    } finally {
+      setIsUpdating(false);
+      setReviewToDelete(null);
+    }
   };
 
-  // Compute stats
-  const totalReviews = reviews.length;
-  const visibleCount = reviews.filter((r) => r.isVisible).length;
-  const hiddenCount = reviews.filter((r) => !r.isVisible).length;
+  // Compute stats directly from DB counts
+  const totalReviews = stats.total;
+  const visibleCount = stats.visible;
+  const hiddenCount = stats.hidden;
 
-  // Filter & Sort reviews
-  const filteredReviews = useMemo(() => {
-    return reviews
-      .filter((r) => {
-        // Status filter
-        if (statusFilter === "visible" && !r.isVisible) return false;
-        if (statusFilter === "hidden" && r.isVisible) return false;
+  // Reset pagination to page 1 whenever DB search query, status filter, or sort option changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch, statusFilter, sortOption]);
 
-        // Search query
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase().trim();
-          const matchName = r.name.toLowerCase().includes(q);
-          const matchText = r.text.toLowerCase().includes(q);
-          const matchDate = r.date.toLowerCase().includes(q);
-          return matchName || matchText || matchDate;
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortOption === "name") {
-          return a.name.localeCompare(b.name);
-        }
-        if (sortOption === "oldest") {
-          return a.id - b.id;
-        }
-        // newest first by default
-        return b.id - a.id;
-      });
-  }, [reviews, searchQuery, statusFilter, sortOption]);
+  // Keep currentPage valid when total pages change
+  const totalPages = Math.max(1, Math.ceil(reviews.length / itemsPerPage));
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
+
+  // Sliced reviews for the current page from DB results
+  const paginatedReviews = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return reviews.slice(startIndex, startIndex + itemsPerPage);
+  }, [reviews, currentPage, itemsPerPage]);
+
+  const handleItemsPerPageChange = (count: number) => {
+    setItemsPerPage(count);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -174,17 +325,11 @@ export default function AdminReviewsPage() {
             Manage student and alumni testimonials shown on the website.
           </p>
         </div>
-        <button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-5 py-2.5 rounded-xl font-semibold shadow-sm transition-colors text-sm shrink-0"
-        >
-          + Add Review
-        </button>
       </div>
 
       {/* 2. Controls Toolbar: Search, Filters & Counter Pill */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        {/* Search Bar */}
+        {/* Search Bar - Filter directly from DB by name */}
         <div className="relative flex-1">
           <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none">
             <MagnifyingGlass size={18} weight="bold" />
@@ -193,7 +338,7 @@ export default function AdminReviewsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search reviews by name or keyword..."
+            placeholder="Search by name..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E2E8F0] bg-white text-[13.5px] text-[#1E293B] placeholder-[#94A3B8] focus:outline-none focus:border-[#2563EB] focus:ring-1 focus:ring-[#2563EB] transition-all shadow-xs"
           />
           {searchQuery && (
@@ -243,13 +388,17 @@ export default function AdminReviewsPage() {
           </div>
 
           {/* Total Counter Badge Pill */}
-          <div className="px-3.5 py-2.5 rounded-xl bg-[#F1F5F9] text-[#475569] text-[13px] font-semibold border border-[#E2E8F0] whitespace-nowrap shadow-xs">
-            {filteredReviews.length} reviews
-          </div>
+          {isLoading ? (
+            <div className="h-10 w-24 bg-gray-200 rounded-xl animate-pulse" />
+          ) : (
+            <div className="px-3.5 py-2.5 rounded-xl bg-[#F1F5F9] text-[#475569] text-[13px] font-semibold border border-[#E2E8F0] whitespace-nowrap shadow-xs">
+              {reviews.length} reviews
+            </div>
+          )}
         </div>
       </div>
 
-      {/* 3. Metrics / KPI Stats Cards (3 cards matching exact design) */}
+      {/* 3. Metrics / KPI Stats Cards with Shimmer when loading */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
         {/* Card 1: ARCHIVED / HIDDEN */}
         <div className="bg-[#0F172A] rounded-2xl p-5 sm:p-6 text-white border border-[#1E293B] flex items-center justify-between shadow-sm">
@@ -257,9 +406,13 @@ export default function AdminReviewsPage() {
             <p className="text-[10.5px] font-bold tracking-widest text-[#94A3B8] uppercase">
               ARCHIVED / HIDDEN
             </p>
-            <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
-              {String(hiddenCount).padStart(2, "0")}
-            </p>
+            {isLoading ? (
+              <div className="h-9 w-16 bg-slate-700/70 rounded-lg animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
+                {String(hiddenCount).padStart(2, "0")}
+              </p>
+            )}
           </div>
           <div className="w-12 h-12 rounded-xl bg-[#EF4444]/15 border border-[#EF4444]/25 flex items-center justify-center text-[#F87171] shrink-0">
             <EyeSlash size={22} weight="bold" />
@@ -272,9 +425,13 @@ export default function AdminReviewsPage() {
             <p className="text-[10.5px] font-bold tracking-widest text-[#94A3B8] uppercase">
               LIVE & VISIBLE
             </p>
-            <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
-              {String(visibleCount).padStart(2, "0")}
-            </p>
+            {isLoading ? (
+              <div className="h-9 w-16 bg-slate-700/70 rounded-lg animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
+                {String(visibleCount).padStart(2, "0")}
+              </p>
+            )}
           </div>
           <div className="w-12 h-12 rounded-xl bg-[#10B981]/15 border border-[#10B981]/25 flex items-center justify-center text-[#34D399] shrink-0">
             <Eye size={22} weight="bold" />
@@ -287,9 +444,13 @@ export default function AdminReviewsPage() {
             <p className="text-[10.5px] font-bold tracking-widest text-[#94A3B8] uppercase">
               TOTAL TESTIMONIALS
             </p>
-            <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
-              {String(totalReviews).padStart(2, "0")}
-            </p>
+            {isLoading ? (
+              <div className="h-9 w-16 bg-slate-700/70 rounded-lg animate-pulse mt-1.5" />
+            ) : (
+              <p className="text-[32px] sm:text-[36px] font-extrabold text-white mt-1 leading-none tracking-tight">
+                {String(totalReviews).padStart(2, "0")}
+              </p>
+            )}
           </div>
           <div className="w-12 h-12 rounded-xl bg-[#6366F1]/15 border border-[#6366F1]/25 flex items-center justify-center text-[#818CF8] shrink-0">
             <Star size={22} weight="regular" />
@@ -298,107 +459,197 @@ export default function AdminReviewsPage() {
       </div>
 
       {/* 4. Reviews Grid (3 columns) */}
-      {filteredReviews.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-pulse">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <div
+              key={n}
+              className="bg-white rounded-2xl p-5 border border-[#E2E8F0]/80 shadow-xs flex flex-col justify-between h-[280px]"
+            >
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="w-9 h-9 rounded-full bg-gray-200" />
+                  <div className="w-16 h-5 rounded-full bg-gray-100" />
+                </div>
+                <div className="space-y-2 mt-4">
+                  <div className="h-3.5 bg-gray-100 rounded w-full" />
+                  <div className="h-3.5 bg-gray-100 rounded w-5/6" />
+                </div>
+                <div className="mt-4 space-y-1">
+                  <div className="h-4 bg-gray-200 rounded w-1/3" />
+                  <div className="h-3 bg-gray-100 rounded w-1/4" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-4 pt-3.5 border-t border-[#F1F5F9]">
+                <div className="h-8 rounded-xl bg-gray-100" />
+                <div className="h-8 rounded-xl bg-gray-100" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : reviews.length === 0 ? (
         <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-xs">
           <div className="w-14 h-14 rounded-2xl bg-gray-50 text-gray-400 mx-auto flex items-center justify-center mb-3">
             <MagnifyingGlass size={26} />
           </div>
           <h3 className="text-base font-bold text-gray-800">No reviews found</h3>
           <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-            Try adjusting your search query or status filter to see testimonials.
+            {totalReviews === 0
+              ? "No reviews have been submitted by alumni yet."
+              : "Try adjusting your search query or status filter to see testimonials."}
           </p>
-          <button
-            onClick={() => {
-              setSearchQuery("");
-              setStatusFilter("all");
-            }}
-            className="mt-4 px-4 py-2 rounded-xl bg-[#0E1528] text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
-          >
-            Reset Filters
-          </button>
+          {totalReviews > 0 && (
+            <button
+              onClick={() => {
+                setSearchQuery("");
+                setStatusFilter("all");
+              }}
+              className="mt-4 px-4 py-2 rounded-xl bg-[#0E1528] text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
+            >
+              Reset Filters
+            </button>
+          )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredReviews.map((review) => {
-            return (
-              <div
-                key={review.id}
-                className="bg-white rounded-2xl p-5 border border-[#E2E8F0]/80 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:shadow-md transition-all duration-200"
-              >
-                <div>
-                  {/* Top Avatar Row & Status Badge */}
-                  <div className="flex items-center justify-between">
-                    {/* Initials Circle & Gold Quotes */}
-                    <div className="flex items-center gap-2">
-                      <div className="w-9 h-9 rounded-full bg-[#1E293B] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
-                        {review.initials}
+        <div className="space-y-4">
+          {/* Scrollable Reviews Cards Container */}
+          <div className="max-h-[620px] overflow-y-auto pr-2 review-scroll scroll-smooth">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-2">
+              {paginatedReviews.map((review) => {
+                return (
+                  <div
+                    key={review.id}
+                    className="bg-white rounded-2xl p-5 border border-[#E2E8F0]/80 shadow-[0_2px_8px_rgba(0,0,0,0.03)] flex flex-col justify-between hover:shadow-md transition-all duration-200"
+                  >
+                    <div>
+                      {/* Top Avatar Row & Status Badge */}
+                      <div className="flex items-center justify-between">
+                        {/* Initials Circle */}
+                        <div className="w-9 h-9 rounded-full bg-[#1E293B] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-xs">
+                          {review.initials}
+                        </div>
+
+                        {/* Status Badge */}
+                        {review.isVisible ? (
+                          <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] border border-[#A7F3D0]/70 px-2.5 py-0.5 rounded-full">
+                            Visible
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-semibold text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA]/70 px-2.5 py-0.5 rounded-full">
+                            Hidden
+                          </span>
+                        )}
                       </div>
 
-                      {/* Golden Double / Triple Quote Marks */}
-                      <div className="flex items-center text-[#FFA401] opacity-90 pl-0.5">
-                        <span className="text-xs font-serif tracking-tighter select-none font-bold">“““</span>
+                      {/* Review Text with dedicated vertical scrollbar */}
+                      <div className={`overflow-y-auto overflow-x-hidden pr-1 review-scroll mt-3 mb-2.5 ${review.photos && review.photos.length > 0 ? "h-[72px] max-h-[72px]" : "h-[92px] max-h-[92px]"}`}>
+                        <blockquote className="text-[#475569] text-[13px] italic leading-snug break-words [overflow-wrap:anywhere]">
+                          <span
+                            aria-hidden="true"
+                            className="inline-block text-base leading-none text-[#FF8117] font-serif font-bold mr-1 align-baseline select-none not-italic"
+                          >
+                            &ldquo;
+                          </span>
+                          <span className="break-words [overflow-wrap:anywhere]">{cleanReviewText(review.text)}</span>
+                          <span
+                            aria-hidden="true"
+                            className="inline-block text-base leading-none text-[#FF8117] font-serif font-bold ml-1 align-baseline select-none not-italic"
+                          >
+                            &rdquo;
+                          </span>
+                        </blockquote>
                       </div>
+
+                      {/* Author Name, Email and Date */}
+                      <div className="mt-3.5">
+                        <h4 className="text-[14px] font-bold text-[#0F172A] leading-snug">
+                          {review.name}
+                        </h4>
+                        {review.email && (
+                          <p className="text-[11.5px] text-[#64748B] font-medium truncate mt-0.5">
+                            {review.email}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] font-normal mt-0.5">
+                          <CalendarBlank size={13} weight="bold" />
+                          <span>{review.date}</span>
+                        </div>
+                      </div>
+
+                      {/* Photo Attachments (if any) */}
+                      {review.photos && review.photos.length > 0 && (
+                        <div className="mt-3 pt-2.5 border-t border-gray-100">
+                          <p className="text-[10px] font-bold text-[#64748B] uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <ImageIcon size={12} />
+                            <span>Attached Photos ({review.photos.length})</span>
+                          </p>
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {review.photos.map((photo, pIdx) => (
+                              <div
+                                key={pIdx}
+                                onClick={() => setSelectedPhoto(photo)}
+                                className="relative size-12 rounded-lg overflow-hidden shrink-0 border border-gray-200 cursor-pointer hover:border-blue-500 transition-colors shadow-2xs group"
+                              >
+                                <Image
+                                  src={photo}
+                                  alt="Review attachment"
+                                  fill
+                                  sizes="48px"
+                                  className="object-cover group-hover:scale-105 transition-transform"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
-                    {/* Status Badge */}
-                    {review.isVisible ? (
-                      <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] border border-[#A7F3D0]/70 px-2.5 py-0.5 rounded-full">
-                        Visible
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-semibold text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA]/70 px-2.5 py-0.5 rounded-full">
-                        Hidden
-                      </span>
-                    )}
-                  </div>
+                    {/* Bottom Action Buttons: Hide / Delete */}
+                    <div className="grid grid-cols-2 gap-2 mt-4 pt-3.5 border-t border-[#F1F5F9]">
+                      <button
+                        onClick={() => setReviewToToggle(review)}
+                        disabled={isUpdating}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] text-[12px] font-semibold text-[#475569] transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        {review.isVisible ? (
+                          <>
+                            <EyeSlash size={15} />
+                            <span>Hide</span>
+                          </>
+                        ) : (
+                          <>
+                            <Eye size={15} />
+                            <span>Unhide</span>
+                          </>
+                        )}
+                      </button>
 
-                  {/* Review Text */}
-                  <p className="text-[#475569] text-[13px] italic leading-relaxed mt-3.5 mb-3.5 line-clamp-2">
-                    {review.text}
-                  </p>
-
-                  {/* Author Name and Date */}
-                  <div className="mt-3.5">
-                    <h4 className="text-[14px] font-bold text-[#0F172A] leading-snug">
-                      {review.name}
-                    </h4>
-                    <div className="flex items-center gap-1.5 text-[11.5px] text-[#94A3B8] font-normal mt-0.5">
-                      <CalendarBlank size={13} weight="bold" />
-                      <span>{review.date}</span>
+                      <button
+                        onClick={() => setReviewToDelete(review)}
+                        disabled={isUpdating}
+                        className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[12px] font-semibold text-[#EF4444] border border-[#FECACA]/70 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash size={15} />
+                        <span>Delete</span>
+                      </button>
                     </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          </div>
 
-                {/* Bottom Action Buttons: Hide / Delete */}
-                <div className="grid grid-cols-2 gap-2 mt-4 pt-3.5 border-t border-[#F1F5F9]">
-                  <button
-                    onClick={() => setReviewToToggle(review)}
-                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl border border-[#E2E8F0] bg-white hover:bg-[#F8FAFC] text-[12px] font-semibold text-[#475569] transition-colors cursor-pointer"
-                  >
-                    {review.isVisible ? (
-                      <>
-                        <EyeSlash size={15} />
-                        <span>Hide</span>
-                      </>
-                    ) : (
-                      <>
-                        <Eye size={15} />
-                        <span>Unhide</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => setReviewToDelete(review)}
-                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#FEF2F2] hover:bg-[#FEE2E2] text-[12px] font-semibold text-[#EF4444] border border-[#FECACA]/70 transition-colors cursor-pointer"
-                  >
-                    <Trash size={15} />
-                    <span>Delete</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {/* Pagination Controls */}
+          <Pagination
+            currentPage={currentPage}
+            totalItems={reviews.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            itemsPerPageOptions={[6, 9, 12, 18]}
+            onItemsPerPageChange={handleItemsPerPageChange}
+            alwaysShow={true}
+            bgClassName="bg-transparent pt-3 border-t border-[#E2E8F0]/80"
+          />
         </div>
       )}
 
@@ -617,118 +868,6 @@ export default function AdminReviewsPage() {
                         <span>Show Review</span>
                       </button>
                     )}
-                  </div>
-                </Dialog.Panel>
-              </Transition.Child>
-            </div>
-          </div>
-        </Dialog>
-      </Transition>
-      {/* 6. Add Review Modal */}
-      <Transition appear show={isAddModalOpen} as={Fragment}>
-        <Dialog
-          as="div"
-          className="relative z-[10000]"
-          onClose={() => setIsAddModalOpen(false)}
-        >
-          <Transition.Child
-            as={Fragment}
-            enter="ease-out duration-200"
-            enterFrom="opacity-0"
-            enterTo="opacity-100"
-            leave="ease-in duration-150"
-            leaveFrom="opacity-100"
-            leaveTo="opacity-0"
-          >
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
-          </Transition.Child>
-
-          <div className="fixed inset-0 overflow-y-auto">
-            <div className="flex min-h-full items-center justify-center p-4">
-              <Transition.Child
-                as={Fragment}
-                enter="ease-out duration-300"
-                enterFrom="opacity-0 scale-95"
-                enterTo="opacity-100 scale-100"
-                leave="ease-in duration-200"
-                leaveFrom="opacity-100 scale-100"
-                leaveTo="opacity-0 scale-95"
-              >
-                <Dialog.Panel className="relative w-full max-w-lg transform overflow-hidden rounded-[24px] bg-white p-6 sm:p-8 text-left shadow-2xl transition-all border border-gray-100">
-                  <button
-                    onClick={() => setIsAddModalOpen(false)}
-                    className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-lg cursor-pointer"
-                  >
-                    <X size={18} weight="bold" />
-                  </button>
-
-                  <Dialog.Title as="h3" className="text-xl font-bold text-[#111827] mb-6">
-                    Add New Review
-                  </Dialog.Title>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Author Name</label>
-                      <input
-                        type="text"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
-                        placeholder="e.g. John Doe"
-                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Review Text</label>
-                      <textarea
-                        value={newText}
-                        onChange={(e) => setNewText(e.target.value)}
-                        placeholder="What did they say?"
-                        rows={4}
-                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-1">Photos (Optional)</label>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        onChange={handleImageUpload}
-                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                      />
-                      {newPhotos.length > 0 && (
-                        <div className="flex gap-2 mt-3 overflow-x-auto pb-2">
-                          {newPhotos.map((photo, i) => (
-                            <div key={i} className="relative h-16 w-16 rounded-lg overflow-hidden shrink-0 border border-gray-200">
-                              <Image src={photo} alt="Upload preview" fill className="object-cover" />
-                              <button
-                                onClick={() => setNewPhotos(newPhotos.filter((_, idx) => idx !== i))}
-                                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5"
-                              >
-                                <X size={10} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 mt-8">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddModalOpen(false)}
-                      className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleAddReview}
-                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors text-sm"
-                    >
-                      Save Review
-                    </button>
                   </div>
                 </Dialog.Panel>
               </Transition.Child>

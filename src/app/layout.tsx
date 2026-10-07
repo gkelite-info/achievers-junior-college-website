@@ -101,7 +101,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <ApplyModal />
               <AnalyticsTracker />
             </Suspense>
-            <Toaster position="top-right" />
+            <Toaster position="top-right" containerStyle={{ zIndex: 99999 }} />
           </UserProvider>
         </QueryProvider>
       </body>

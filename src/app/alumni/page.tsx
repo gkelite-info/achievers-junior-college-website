@@ -2,7 +2,9 @@ import motion from "@/components/HoverExpansion.module.css";
 import type { Metadata } from "next";
 import Image from "next/image";
 import heroImage from "../../../public/alumini_header.png";
+import { Suspense } from "react";
 import Testimonials from "./components/Testimonials";
+import TestimonialsShimmer from "./components/TestimonialsShimmer";
 
 export const metadata: Metadata = {
   title: "Alumni | Achievers Junior College",
@@ -54,7 +56,9 @@ export default function AlumniPage() {
       </section>
 
       <div className="mx-auto max-w-[1280px] px-4 py-12 sm:px-10 sm:py-16">
-        <Testimonials />
+        <Suspense fallback={<TestimonialsShimmer />}>
+          <Testimonials />
+        </Suspense>
       </div>
     </div>
   );

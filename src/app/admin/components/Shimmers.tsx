@@ -214,3 +214,110 @@ export function GalleryOverallShimmer() {
   );
 }
 
+export function AdminHomeShimmer() {
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto select-none font-sans" aria-hidden="true">
+      {/* 1. Header Shimmer */}
+      <div className="space-y-2">
+        <div className="h-8 w-64 rounded-xl shimmer" />
+        <div className="h-4 w-96 max-w-full rounded-md shimmer" />
+      </div>
+
+      {/* 2. 5 Metric / KPI Cards Shimmer */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div
+            key={i}
+            className="p-5 rounded-2xl bg-white border border-gray-100 shadow-xs flex flex-col justify-between min-h-[160px]"
+          >
+            <div className="w-10 h-10 rounded-xl shimmer" />
+            <div className="mt-4 space-y-2">
+              <div className="h-7 w-20 rounded-md shimmer" />
+              <div className="h-3.5 w-28 rounded shimmer" />
+            </div>
+            <div className="mt-3 h-4 w-32 rounded shimmer" />
+          </div>
+        ))}
+      </div>
+
+      {/* 3. Two Column Grid - Row 1 Shimmer */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Applications Card Shimmer */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 flex flex-col justify-between min-h-[440px]">
+          <div>
+            <div className="pb-4 border-b border-gray-100">
+              <div className="h-5 w-44 rounded-md shimmer" />
+            </div>
+            <div className="divide-y divide-gray-50 pt-1">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="py-3.5 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3.5 flex-1">
+                    <div className="w-10 h-10 rounded-full shrink-0 shimmer" />
+                    <div className="space-y-1.5 flex-1">
+                      <div className="h-4 w-36 rounded shimmer" />
+                      <div className="h-3 w-16 rounded shimmer" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3.5 shrink-0">
+                    <div className="h-3.5 w-28 rounded shimmer hidden sm:block" />
+                    <div className="h-6 w-16 rounded-full shimmer" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Payment Overview Card Shimmer */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 flex flex-col justify-between min-h-[440px]">
+          <div>
+            <div className="pb-4 border-b border-gray-100">
+              <div className="h-5 w-40 rounded-md shimmer" />
+            </div>
+            <div className="mt-6 h-48 w-full rounded-xl shimmer" />
+            <div className="flex justify-between gap-2 mt-2 px-9">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                <div key={i} className="h-3 w-6 rounded shimmer" />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-5 mt-4 border-t border-gray-100/80">
+            <div className="h-16 rounded-2xl border border-slate-100 shimmer" />
+            <div className="h-16 rounded-2xl border border-slate-100 shimmer" />
+          </div>
+        </div>
+      </div>
+
+      {/* 4. Two Column Grid - Row 2 Shimmer */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Gallery Images Card Shimmer */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 min-h-[420px]">
+          <div className="pb-4 border-b border-gray-100">
+            <div className="h-5 w-44 rounded-md shimmer" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 mt-5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="flex flex-col items-center space-y-2">
+                <div className="aspect-[4/3] w-full rounded-xl shimmer" />
+                <div className="h-3 w-16 rounded shimmer" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Recent Reviews Card Shimmer */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-6 min-h-[420px]">
+          <div className="pb-4 border-b border-gray-100">
+            <div className="h-5 w-36 rounded-md shimmer" />
+          </div>
+          <div className="space-y-3.5 mt-5">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-28 rounded-2xl border border-slate-100 p-4.5 shimmer" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

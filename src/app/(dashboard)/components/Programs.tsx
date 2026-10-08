@@ -1,6 +1,7 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight } from "@phosphor-icons/react/dist/ssr";
 
 const programs = [
   {
@@ -8,35 +9,30 @@ const programs = [
     title: "MPC",
     description: "Mathematics, Physics & Chemistry. Ideal for careers in Engineering, AI, Data Science, and Architecture.",
     icon: "/user-with-gears.svg",
-    active: false,
   },
   {
     id: "bipc",
     title: "BiPC",
     description: "Biology, Physics & Chemistry. Prepares students for careers in Medicine, Pharmacy, and Biotechnology.",
     icon: "/medpuls.svg",
-    active: true,
   },
   {
     id: "mec",
     title: "MEC",
     description: "Mathematics, Economics & Commerce. Designed for future financial leaders, CA, and management.",
     icon: "/currency.svg",
-    active: false,
   },
   {
     id: "cec",
     title: "CEC",
     description: "Civics, Economics & Commerce. Perfect for careers in Law, Civil Services, and Public Administration.",
     icon: "/target.svg",
-    active: false,
   },
   {
     id: "ace",
     title: "ACE",
     description: "Accounts, Commerce & Economics. Comprehensive foundation for CA, CS, CMA, and entrepreneurship.",
     icon: "/file.svg",
-    active: false,
   },
 ];
 
@@ -68,55 +64,35 @@ export default function Programs() {
             if (index === 4) colSpanClass = "md:col-span-2";
 
             return (
-              <div
+              <Link
                 key={program.id}
-                className={`${colSpanClass} rounded-[32px] p-[40px] flex flex-col gap-[16px] transition-transform duration-300 hover:-translate-y-2 ${program.active
-                  ? "bg-[#0E1436]"
-                  : "bg-[#EFF4FF] shadow-[0px_4px_4px_rgba(0,0,0,0.25)]"
-                  }`}
+                href={`/services#${program.id}`}
+                className={`group ${colSpanClass} rounded-[32px] p-[40px] flex flex-col gap-[16px] transition-all duration-300 hover:-translate-y-2 cursor-pointer bg-[#EFF4FF] hover:bg-[#0E1436] active:bg-[#0E1436] shadow-[0px_4px_4px_rgba(0,0,0,0.25)] hover:shadow-xl`}
               >
                 <div
-                  className={`w-[64px] h-[64px] rounded-full flex items-center justify-center ${program.active ? "bg-[#FFFFFF]" : "bg-[#081D36]"
-                    }`}
+                  className="w-[64px] h-[64px] rounded-full flex items-center justify-center transition-colors duration-300 bg-[#081D36] group-hover:bg-[#FFFFFF]"
                 >
                   <Image
                     src={program.icon}
                     alt={`${program.title} icon`}
                     width={29}
                     height={29}
-                    className={`object-contain ${program.active ? "" : "brightness-0 invert"}`}
+                    className="object-contain transition-all duration-300 brightness-0 invert group-hover:invert-0 group-hover:brightness-0"
                   />
                 </div>
 
                 <h3
-                  className={`text-[24px] font-semibold leading-[32px] mt-[16px] ${program.active ? "text-[#FFFFFF]" : "text-[#0B1C30]"
-                    }`}
+                  className="text-[24px] font-semibold leading-[32px] mt-[16px] transition-colors duration-300 text-[#0B1C30] group-hover:text-[#FFFFFF]"
                 >
                   {program.title}
                 </h3>
 
                 <p
-                  className={`text-[16px] leading-[24px] font-normal min-h-[96px] ${program.active ? "text-[#FFFFFF] opacity-90" : "text-[#0B1C30] opacity-80"
-                    }`}
+                  className="text-[16px] leading-[24px] font-normal min-h-[96px] transition-colors duration-300 text-[#0B1C30]/80 group-hover:text-[#FFFFFF]/90"
                 >
                   {program.description}
                 </p>
-
-                <div className="pt-[15px] mt-auto hidden">
-                  <Link
-                    href={`#${program.id}`}
-                    className={`inline-flex items-center text-[16px] font-semibold leading-[24px] group transition-opacity hover:opacity-80 ${program.active ? "text-[#EFF4FF]" : "text-[#0B1C30]"
-                      }`}
-                  >
-                    Explore Program
-                    <ArrowRight
-                      size={19}
-                      weight="bold"
-                      className="ml-[8px] transition-transform group-hover:translate-x-1"
-                    />
-                  </Link>
-                </div>
-              </div>
+              </Link>
             );
           })}
         </div>

@@ -17,9 +17,13 @@ import {
   List,
   X,
   IdentificationCard,
+  BookOpen,
+  Star,
+  Bell,
 } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { supabase } from "@/lib/supabaseClient";
+import { fetchAdminAlumniReviews } from "@/lib/helpers/alumniReviewsAPI";
 import { NavbarActionsShimmer } from "@/app/admin/components/Shimmers";
 import { AdminLoadingProvider, useAdminLoading } from "./context/AdminLoadingContext";
 import { useUser } from "@/context/UserContext";
@@ -49,6 +53,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [appCount, setAppCount] = useState<number | string>("42");
+  const [reviewCount, setReviewCount] = useState<number | string>(5);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [logoutModalOpen, setLogoutModalOpen] = useState(false);
   const [isNavbarLoading, setIsNavbarLoading] = useState(true);
@@ -67,29 +72,48 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    // Fetch live application count
-    async function fetchCount() {
+    // Fetch live counts for applications and reviews
+    async function fetchCounts() {
       try {
         const { count } = await supabase
           .from("users")
           .select("*", { count: "exact", head: true })
           .eq("is_deleted", false);
-        if (count && count > 0) {
+        if (typeof count === "number") {
           setAppCount(count);
         }
       } catch {
         // fallback to default
       }
+
+      try {
+        const result = await fetchAdminAlumniReviews();
+        if (result?.stats?.total !== undefined) {
+          setReviewCount(result.stats.total);
+        }
+      } catch {
+        try {
+          const { count } = await supabase
+            .from("alumni_reviews")
+            .select("*", { count: "exact", head: true })
+            .eq("is_deleted", false);
+          if (typeof count === "number") {
+            setReviewCount(count);
+          }
+        } catch {
+          // fallback
+        }
+      }
     }
-    fetchCount();
-  }, []);
+    fetchCounts();
+  }, [pathname]);
 
   const navItems: NavItem[] = [
     { name: "Dashboard", href: "/admin/home", icon: House },
     { name: "Applications", href: "/admin/applications", icon: FileText, badge: appCount },
     { name: "Gallery", href: "/admin/gallery", icon: ImageIcon },
-    { name: "Fee & Payments", href: "/admin/payments", icon: CreditCard },
-    { name: "Reviews & Stories", href: "/admin/reviews", icon: ChatCircleText, badge: 24 },
+    { name: "Payments", href: "/admin/payments", icon: CreditCard },
+    { name: "Reviews", href: "/admin/reviews", icon: ChatCircleText, badge: reviewCount },
   ];
 
   // Close profile dropdown when clicking outside
@@ -221,7 +245,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                 pathname.startsWith("/admin/profile") ? "text-[#FFA401]" : "text-slate-400 group-hover:text-white"
               }`}
             />
-            <span className="truncate">Admin Settings</span>
+            <span>Admin Settings</span>
           </Link>
         </nav>
 
@@ -229,7 +253,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
         <div className="p-4 border-t border-slate-800/80">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3.5 w-full px-4 py-2.5 text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
+            className="flex items-center gap-3.5 w-full px-4 py-3 text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
           >
             <SignOut size={18} />
             <span>Logout</span>
@@ -247,7 +271,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
           <aside className="relative flex flex-col w-[265px] bg-[#0E1528] text-white z-10 shadow-2xl h-full">
             <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full border-2 border-[#FFA401] shadow-[0_0_12px_rgba(255,164,1,0.5)] bg-[#0A1020] flex items-center justify-center shrink-0 overflow-hidden">
+                <div className="relative w-10 h-10 rounded-full border border-[#FFA401] shadow-[0_0_10px_rgba(255,164,1,0.4)] bg-[#0A1020] flex items-center justify-center shrink-0 overflow-hidden">
                   <img src="/college_logo.jpeg" alt="Achievers Logo" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex flex-col">
@@ -263,13 +287,14 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
               </button>
             </div>
 
-            <div className="px-6 mt-4 mb-2">
+            {/* Section Header: MAIN NAVIGATION */}
+            <div className="px-6 pt-4 pb-1">
               <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
                 MAIN NAVIGATION
               </p>
             </div>
 
-            <nav className="flex-1 py-1 space-y-1 px-3 overflow-y-auto">
+            <nav className="flex-1 py-1 space-y-1.5 px-3 overflow-y-auto">
               {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = isCurrentActive(item.href);
@@ -279,17 +304,17 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                     key={item.name}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`relative flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all ${
+                    className={`relative flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all group ${
                       active
-                        ? "bg-[#252233] text-white font-semibold"
+                        ? "bg-[#252233] text-white shadow-md font-semibold"
                         : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     {active && (
                       <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#FFA401] rounded-r-full" />
                     )}
-                    <Icon size={20} weight={active ? "fill" : "regular"} className={active ? "text-[#FFA401]" : ""} />
-                    <span>{item.name}</span>
+                    <Icon size={20} weight={active ? "fill" : "regular"} className={active ? "text-[#FFA401]" : "text-slate-400"} />
+                    <span className="truncate">{item.name}</span>
                     {item.badge !== undefined && (
                       <span
                         className={`ml-auto text-xs font-semibold px-2.5 py-0.5 rounded-full ${
@@ -304,11 +329,41 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                   </Link>
                 );
               })}
+
+              {/* Section Header: ACCOUNT MANAGEMENT */}
+              <div className="px-2 pt-4 pb-1">
+                <p className="text-[10px] font-bold tracking-widest text-slate-400 uppercase">
+                  ACCOUNT MANAGEMENT
+                </p>
+              </div>
+
+              <Link
+                href="/admin/profile"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`relative flex items-center gap-3.5 px-4 py-3 rounded-2xl text-sm transition-all ${
+                  pathname.startsWith("/admin/profile")
+                    ? "bg-[#252233] text-white shadow-md font-semibold"
+                    : "text-slate-400 hover:text-white hover:bg-white/[0.04]"
+                }`}
+              >
+                {pathname.startsWith("/admin/profile") && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#FFA401] rounded-r-full" />
+                )}
+                <User
+                  size={20}
+                  weight={pathname.startsWith("/admin/profile") ? "fill" : "regular"}
+                  className={pathname.startsWith("/admin/profile") ? "text-[#FFA401]" : "text-slate-400"}
+                />
+                <span>Admin Settings</span>
+              </Link>
             </nav>
 
             <div className="p-4 border-t border-slate-800">
               <button
-                onClick={handleLogout}
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  handleLogout();
+                }}
                 className="flex items-center gap-3.5 w-full px-4 py-3 text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition-all cursor-pointer"
               >
                 <SignOut size={18} />
@@ -334,26 +389,29 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
             </button>
           </div>
 
-          {/* Right Header Icons & Profile */}
+          {/* Right Header Profile */}
           {isProfileShimmering ? (
             <NavbarActionsShimmer />
           ) : (
             <div className="flex items-center gap-3 sm:gap-4">
-
               {/* Profile Dropdown */}
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                  className="flex items-center gap-2 p-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer select-none"
+                  className="flex items-center gap-2.5 p-1 sm:pl-1.5 sm:pr-2.5 py-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer select-none"
                   aria-label="User menu"
                 >
-                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-[#0E1528] text-white font-bold text-xs flex items-center justify-center shrink-0">
                     {adminProfile?.firstName?.charAt(0)?.toUpperCase() || "A"}
-                    {adminProfile?.lastName?.charAt(0)?.toUpperCase() || "D"}
                   </div>
-                  <span className="hidden sm:inline text-xs sm:text-sm font-medium text-gray-800">
-                    {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
-                  </span>
+                  <div className="hidden sm:flex flex-col text-left">
+                    <span className="text-xs font-bold text-gray-900 leading-tight">
+                      {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
+                    </span>
+                    <span className="text-[10px] text-gray-400 font-medium leading-tight mt-0.5">
+                      Administrator
+                    </span>
+                  </div>
                   <CaretDown
                     size={13}
                     className={`text-gray-400 transition-transform ${
@@ -362,33 +420,33 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
                   />
                 </button>
 
-              {/* Profile Dropdown Menu */}
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-4 py-2 border-b border-gray-100 overflow-hidden">
-                    <p className="text-xs font-bold text-gray-800 truncate">
-                      {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
-                    </p>
-                    <p className="text-[11px] text-gray-400 truncate">{adminProfile?.email || "admin@achievers.in"}</p>
+                {/* Profile Dropdown Menu */}
+                {profileDropdownOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-4 py-2 border-b border-gray-100 overflow-hidden">
+                      <p className="text-xs font-bold text-gray-800 truncate">
+                        {adminProfile ? `${adminProfile.firstName || ""} ${adminProfile.lastName || ""}`.trim() || "Admin" : "Admin"}
+                      </p>
+                      <p className="text-[11px] text-gray-400 truncate">{adminProfile?.email || "admin@achievers.in"}</p>
+                    </div>
+                    <Link
+                      href="/admin/profile"
+                      onClick={() => setProfileDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2 text-xs text-gray-700 hover:bg-gray-50"
+                    >
+                      <User size={16} /> My Profile
+                    </Link>
+                    <button
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        handleLogout();
+                      }}
+                      className="flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 cursor-pointer"
+                    >
+                      <SignOut size={16} /> Logout
+                    </button>
                   </div>
-                  <Link
-                    href="/admin/profile"
-                    onClick={() => setProfileDropdownOpen(false)}
-                    className="flex items-center gap-2.5 px-4 py-2 text-xs text-gray-700 hover:bg-gray-50"
-                  >
-                    <User size={16} /> My Profile
-                  </Link>
-                  <button
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      handleLogout();
-                    }}
-                    className="flex items-center gap-2.5 w-full text-left px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 cursor-pointer"
-                  >
-                    <SignOut size={16} /> Logout
-                  </button>
-                </div>
-              )}
+                )}
               </div>
             </div>
           )}

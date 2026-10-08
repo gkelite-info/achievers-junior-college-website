@@ -6,6 +6,8 @@ import Link from "next/link";
 import { ArrowRight, BookOpen, ChartBar, Medal, Trophy } from "@phosphor-icons/react/dist/ssr";
 
 import CourseCards from "./components/CourseCards";
+import ProgramDetails from "./components/ProgramDetails";
+import BeyondAcademics from "./components/BeyondAcademics";
 
 export const metadata: Metadata = {
   title: "Services & Courses | Achievers Junior College",
@@ -48,6 +50,12 @@ export default function ServicesPage() {
 
         <CourseCards />
       </section>
+
+      {/* Detailed Program Breakdown */}
+      <ProgramDetails />
+
+      {/* Beyond Academics - Our Teaching Approach */}
+      <BeyondAcademics />
 
       <section className="mx-auto grid max-w-[1280px] items-center gap-10 px-4 py-16 sm:px-8 sm:py-20 lg:grid-cols-2" aria-labelledby="benefits-heading">
         <div>

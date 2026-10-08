@@ -2,7 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { InstagramLogo, ThreadsLogo, XLogo, PaperPlaneRight } from "@phosphor-icons/react";
+import {
+  InstagramLogo,
+  FacebookLogo,
+  XLogo,
+} from "@phosphor-icons/react";
 
 export default function Footer() {
   const pathname = usePathname();
@@ -19,71 +23,164 @@ export default function Footer() {
   return (
     <footer className="bg-[#111433] pt-[63px] pb-[64px]">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-[40px]">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-[40px] md:gap-[24px] mb-[60px]">
-          <div className="flex flex-col gap-[22.8px] w-full max-w-[384px]">
-            <h3 className="font-sora font-extrabold text-[24px] leading-[34px] text-[#FFFFFF]">
-              Achievers Junior College
-            </h3>
-            <p className="font-sora font-normal text-[16px] leading-[26px] text-[#E0E3E5] opacity-80">
-              Leading the way in quality intermediate education and competitive exam excellence in Hyderabad.
+        {/* Equal Gap 3-Column Layout */}
+        <div className="flex flex-col md:flex-row justify-between items-start gap-10 md:gap-8 lg:gap-14 xl:gap-20 mb-[60px]">
+          {/* Column 1 (Left): College Logo & Map Embed */}
+          <div className="flex flex-col gap-[18px] w-full md:w-[320px] lg:w-[350px] shrink-0">
+            {/* College Logo */}
+            <div className="flex items-center gap-3.5 h-[34px]">
+              <div className="relative w-10 h-10 rounded-full border-2 border-[#FFA401] shadow-[0_0_14px_rgba(255,164,1,0.45)] bg-[#0A1020] flex items-center justify-center shrink-0 overflow-hidden">
+                <img
+                  src="/college_logo.jpeg"
+                  alt="Achievers Junior College Logo"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <div className="flex flex-col justify-center">
+                <span className="font-sora font-extrabold text-[19px] leading-[22px] text-[#FFFFFF]">
+                  Achievers
+                </span>
+                <span className="text-[#FFA401] font-bold text-[10px] tracking-wider uppercase leading-tight">
+                  Junior College
+                </span>
+              </div>
+            </div>
+
+            {/* College Address Google Map Embed */}
+            <div className="w-full overflow-hidden rounded-xl border border-white/10 shadow-md">
+              <iframe
+                title="Achievers Junior College Location Map"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3133.074633303871!2d78.41448417420492!3d17.39831808349077!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bcb970078edcc13%3A0x12aa94649f50b675!2sAchievers%20Junior%20College!5e1!3m2!1sen!2sin!4v1790240440027!5m2!1sen!2sin"
+                className="w-full h-[155px] border-0 block"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allowFullScreen
+              />
+            </div>
+          </div>
+
+          {/* Column 2 (Middle): Address & Contact Details */}
+          <div className="flex flex-col gap-[18px] w-full md:flex-1 md:max-w-[420px]">
+            <h4 className="font-sora font-bold text-[20px] leading-[34px] text-[#FFFFFF] h-[34px] flex items-center">
+              Our Address
+            </h4>
+
+            {/* Address */}
+            <p className="font-sora font-normal text-[14px] leading-[23px] text-[#CBD5E1]">
+              9-4-137/51, Tolichowki Rd, Jamali Kunta, Owaisi colony, Surya Nagar, Toli Chowki, Hyderabad, Telangana 500008
             </p>
-            <div className="flex items-center gap-[16px] mt-[1.2px]">
-              <Link href="#" className="w-[40px] h-[40px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer">
-                <InstagramLogo size={20} weight="fill" />
+
+            {/* Phone & Email */}
+            <div className="flex flex-col gap-1.5 text-[13px] text-[#CBD5E1]">
+              <p>
+                <span className="font-semibold text-white">Phone: </span>
+                <a href="tel:+917337581166" className="text-[#FFA401] hover:underline">
+                  +91 7337581166
+                </a>
+                ,{" "}
+                <a href="tel:+918897288809" className="text-[#FFA401] hover:underline">
+                  +91 8897288809
+                </a>
+              </p>
+              <p>
+                <span className="font-semibold text-white">Email: </span>
+                <a
+                  href="mailto:achieversjnrcollege@gmail.com"
+                  className="text-[#FFA401] hover:underline break-all"
+                >
+                  achieversjnrcollege@gmail.com
+                </a>
+              </p>
+            </div>
+
+            {/* Social Icons */}
+            <div className="flex items-center gap-[12px] pt-1">
+              <Link
+                href="https://instagram.com"
+                target="_blank"
+                rel="noreferrer"
+                className="w-[38px] h-[38px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer"
+                aria-label="Instagram"
+              >
+                <InstagramLogo size={19} weight="fill" />
               </Link>
-              <Link href="#" className="w-[40px] h-[40px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer">
-                <ThreadsLogo size={20} weight="fill" />
+              <Link
+                href="https://facebook.com"
+                target="_blank"
+                rel="noreferrer"
+                className="w-[38px] h-[38px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer"
+                aria-label="Facebook"
+              >
+                <FacebookLogo size={19} weight="fill" />
               </Link>
-              <Link href="#" className="w-[40px] h-[40px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer">
-                <XLogo size={20} weight="fill" />
+              <Link
+                href="https://twitter.com"
+                target="_blank"
+                rel="noreferrer"
+                className="w-[38px] h-[38px] rounded-full bg-white/10 flex items-center justify-center text-[#FFA401] hover:bg-[#FFA401] hover:text-white transition-colors cursor-pointer"
+                aria-label="X (Twitter)"
+              >
+                <XLogo size={19} weight="fill" />
               </Link>
             </div>
           </div>
 
-          <div className="flex flex-col gap-[24px] w-full max-w-[384px]">
-            <h4 className="font-sora font-bold text-[24px] leading-[34px] text-[#FFFFFF]">
+          {/* Column 3 (Right): Quick Links */}
+          <div className="flex flex-col gap-[18px] w-full md:w-[200px] lg:w-[230px] shrink-0">
+            <h4 className="font-sora font-bold text-[20px] leading-[34px] text-[#FFFFFF] h-[34px] flex items-center">
               Quick Links
             </h4>
-            <ul className="flex flex-col gap-[16px]">
-              <li className="pt-[6px] pb-[3px]">
-                <Link href="/about" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">About</Link>
+            <ul className="flex flex-col gap-[14px]">
+              <li>
+                <Link
+                  href="/about"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  About Us
+                </Link>
               </li>
-              <li className="pt-[6px] pb-[3px]">
-                <Link href="/services" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Services</Link>
+              <li>
+                <Link
+                  href="/services"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  Courses & Programs
+                </Link>
               </li>
-              <li className="pt-[6px] pb-[3px]">
-                <Link href="/payments" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Payments</Link>
+              <li>
+                <Link
+                  href="/gallery"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  Photo Gallery
+                </Link>
               </li>
-              <li className="pt-[6px] pb-[3px]">
-                <Link href="/gallery" className="font-sora font-semibold text-[12px] leading-[14px] underline text-[#E0E3E5] opacity-80 hover:text-white hover:opacity-100 transition-colors cursor-pointer">Gallery</Link>
+              <li>
+                <Link
+                  href="/alumni"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  Alumni & Reviews
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/payments"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  Online Payments
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="/contact"
+                  className="font-sora text-[13px] text-[#E0E3E5] opacity-80 hover:text-[#FFA401] hover:opacity-100 transition-colors cursor-pointer"
+                >
+                  Contact Us
+                </Link>
               </li>
             </ul>
           </div>
-
-          <div className="flex flex-col gap-[22.8px] w-full max-w-[384px]">
-            <h4 className="font-sora font-bold text-[24px] leading-[34px] text-[#FFFFFF]">
-              Newsletter
-            </h4>
-            <p className="font-sora font-normal text-[16px] leading-[26px] text-[#E0E3E5] opacity-80">
-              Subscribe to get the latest updates on admissions and events.
-            </p>
-            <form className="flex gap-[8px] mt-[1.2px] w-full">
-              <input
-                type="email"
-                placeholder="Your Email"
-                className="w-full max-w-[325px] h-[45px] bg-white/10 rounded-[8px] px-[12px] font-sora font-normal text-[16px] text-[#FFFFFF] placeholder-[#6B7280] focus:outline-none focus:ring-1 focus:ring-[#FFA401]"
-                required
-              />
-              <button
-                type="submit"
-                className="w-[51px] h-[45px] bg-[#FFA401] hover:bg-[#e69400] text-[#FFFFFF] rounded-[8px] flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                aria-label="Subscribe"
-              >
-                <PaperPlaneRight size={24} weight="fill" />
-              </button>
-            </form>
-          </div>
-
         </div>
 
         <div className="border-t border-[rgba(255,255,255,0.1)] pt-[24px] flex justify-center">

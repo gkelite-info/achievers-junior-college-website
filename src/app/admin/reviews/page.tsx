@@ -113,6 +113,7 @@ export default function AdminReviewsPage() {
                   })
                 : "Recent",
               text: r.review_text,
+              rating: Math.min(5, Math.max(1, Number(r.rating) || 5)),
               isVisible: r.isVisible !== false,
               photos: imagesList,
             };
@@ -529,16 +530,23 @@ export default function AdminReviewsPage() {
                           {review.initials}
                         </div>
 
-                        {/* Status Badge */}
-                        {review.isVisible ? (
-                          <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] border border-[#A7F3D0]/70 px-2.5 py-0.5 rounded-full">
-                            Visible
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-semibold text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA]/70 px-2.5 py-0.5 rounded-full">
-                            Hidden
-                          </span>
-                        )}
+                        {/* Right: Star Rating & Status Badge */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-0.5 text-amber-400" title={`${review.rating || 5} out of 5 stars`}>
+                            {Array.from({ length: Math.min(5, Math.max(1, review.rating || 5)) }).map((_, i) => (
+                              <Star key={i} size={13} weight="fill" />
+                            ))}
+                          </div>
+                          {review.isVisible ? (
+                            <span className="text-[11px] font-semibold text-[#10B981] bg-[#ECFDF5] border border-[#A7F3D0]/70 px-2.5 py-0.5 rounded-full">
+                              Visible
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-semibold text-[#EF4444] bg-[#FEF2F2] border border-[#FECACA]/70 px-2.5 py-0.5 rounded-full">
+                              Hidden
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Review Text with dedicated vertical scrollbar */}

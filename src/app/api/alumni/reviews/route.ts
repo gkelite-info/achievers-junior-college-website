@@ -60,7 +60,7 @@ async function resolveVisitorId(client: any, candidateVisitorId?: string | null,
   try {
     // 1. If candidate visitorId provided, check if it exists in application_analytics_logs
     if (candidateVisitorId && candidateVisitorId.trim()) {
-      const trimmed = candidateVisitorId.trim();
+      const trimmed = candidateVisitorId.trim().substring(0, 36);
       const existing = await client.query(
         `SELECT "visitorId" FROM public.application_analytics_logs WHERE "visitorId" = $1 LIMIT 1`,
         [trimmed]
@@ -104,42 +104,111 @@ async function resolveVisitorId(client: any, candidateVisitorId?: string | null,
     return newVisitorId;
   } catch (err) {
     console.warn("Could not resolve visitorId against application_analytics_logs:", err);
-    return candidateVisitorId || null;
+    return candidateVisitorId ? candidateVisitorId.substring(0, 36) : null;
   }
 }
 
+/**
+ * GET: Dynamic query handler supporting filtering, search, sorting, and pagination
+ */
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const reviewId = searchParams.get("review_id")?.trim();
     const isAdmin = searchParams.get("admin") === "true" || searchParams.get("all") === "true";
     const search = searchParams.get("search")?.trim() || "";
     const status = searchParams.get("status")?.trim() || "all";
     const sort = searchParams.get("sort")?.trim() || "newest";
+    const ratingParam = searchParams.get("rating");
+    const minRatingParam = searchParams.get("minRating");
+    const visitorId = searchParams.get("visitorId")?.trim();
+
+    const limitParam = searchParams.get("limit") || searchParams.get("pageSize");
+    const offsetParam = searchParams.get("offset");
+    const pageParam = searchParams.get("page");
 
     const client = await pool.connect();
 
-    // 1. Fetch KPI metrics from DB for admin
-    let stats = { total: 0, visible: 0, hidden: 0 };
+    // 1. Single review by ID lookup
+    if (reviewId) {
+      const singleRes = await client.query(
+        `SELECT 
+          review_id,
+          "visitorId",
+          full_name,
+          email,
+          rating,
+          review_text,
+          images,
+          "isVisible",
+          "visibilityUpdatedBy",
+          "visibilityUpdatedAt",
+          "deletedBy",
+          "is_Active",
+          is_deleted,
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        FROM public.alumni_reviews
+        WHERE review_id = $1 AND is_deleted = false
+        LIMIT 1`,
+        [reviewId]
+      );
+      client.release();
+
+      if (singleRes.rows.length === 0) {
+        return NextResponse.json(
+          { success: false, message: "Review not found" },
+          { status: 404 }
+        );
+      }
+
+      return NextResponse.json({
+        success: true,
+        review: singleRes.rows[0],
+      });
+    }
+
+    // 2. Fetch KPI metrics from DB for admin
+    let stats = {
+      total: 0,
+      visible: 0,
+      hidden: 0,
+      avgRating: 5,
+      fiveStar: 0,
+      fourStar: 0,
+      threeStar: 0,
+    };
+
     if (isAdmin) {
       const statsQuery = `
         SELECT 
           COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE "isVisible" = true)::int AS visible,
-          COUNT(*) FILTER (WHERE "isVisible" = false)::int AS hidden
+          COUNT(*) FILTER (WHERE "isVisible" = false)::int AS hidden,
+          COALESCE(ROUND(AVG(rating)::numeric, 1)::float, 5.0) AS "avgRating",
+          COUNT(*) FILTER (WHERE rating = 5)::int AS "fiveStar",
+          COUNT(*) FILTER (WHERE rating = 4)::int AS "fourStar",
+          COUNT(*) FILTER (WHERE rating = 3)::int AS "threeStar"
         FROM public.alumni_reviews
         WHERE is_deleted = false
       `;
       const statsRes = await client.query(statsQuery);
       if (statsRes.rows.length > 0) {
+        const row = statsRes.rows[0];
         stats = {
-          total: Number(statsRes.rows[0].total || 0),
-          visible: Number(statsRes.rows[0].visible || 0),
-          hidden: Number(statsRes.rows[0].hidden || 0),
+          total: Number(row.total || 0),
+          visible: Number(row.visible || 0),
+          hidden: Number(row.hidden || 0),
+          avgRating: Number(row.avgRating || 5),
+          fiveStar: Number(row.fiveStar || 0),
+          fourStar: Number(row.fourStar || 0),
+          threeStar: Number(row.threeStar || 0),
         };
       }
     }
 
-    // 2. Build filtered query from DB
+    // 3. Build dynamic query conditions
     const conditions: string[] = ["is_deleted = false"];
     const params: any[] = [];
 
@@ -153,47 +222,116 @@ export async function GET(request: Request) {
       }
     }
 
-    if (search) {
-      params.push(`%${search}%`);
-      conditions.push(`(full_name ILIKE $${params.length} OR email ILIKE $${params.length})`);
+    // Exact Rating filter
+    if (ratingParam !== null && !isNaN(Number(ratingParam))) {
+      params.push(Number(ratingParam));
+      conditions.push(`rating = $${params.length}`);
     }
 
+    // Min Rating filter
+    if (minRatingParam !== null && !isNaN(Number(minRatingParam))) {
+      params.push(Number(minRatingParam));
+      conditions.push(`rating >= $${params.length}`);
+    }
+
+    // Visitor ID filter
+    if (visitorId) {
+      params.push(visitorId);
+      conditions.push(`"visitorId" = $${params.length}`);
+    }
+
+    // Search query across full_name, email, and review_text
+    if (search) {
+      params.push(`%${search}%`);
+      const searchParamIdx = params.length;
+      conditions.push(`(full_name ILIKE $${searchParamIdx} OR email ILIKE $${searchParamIdx} OR review_text ILIKE $${searchParamIdx})`);
+    }
+
+    // Total count query for pagination
+    const countQuery = `
+      SELECT COUNT(*)::int AS total
+      FROM public.alumni_reviews
+      WHERE ${conditions.join(" AND ")}
+    `;
+    const countRes = await client.query(countQuery, params);
+    const totalCount = countRes.rows[0]?.total || 0;
+
+    // Sorting
     let orderByClause = `ORDER BY "createdAt" DESC`;
     if (sort === "oldest") {
       orderByClause = `ORDER BY "createdAt" ASC`;
-    } else if (sort === "name") {
+    } else if (sort === "rating_desc") {
+      orderByClause = `ORDER BY rating DESC, "createdAt" DESC`;
+    } else if (sort === "rating_asc") {
+      orderByClause = `ORDER BY rating ASC, "createdAt" DESC`;
+    } else if (sort === "name_asc" || sort === "name") {
       orderByClause = `ORDER BY full_name ASC`;
+    } else if (sort === "name_desc") {
+      orderByClause = `ORDER BY full_name DESC`;
     } else {
       orderByClause = `ORDER BY "createdAt" DESC`;
+    }
+
+    // Pagination clauses
+    let paginationClause = "";
+    let limitNum: number | null = null;
+    let offsetNum: number | null = null;
+
+    if (limitParam !== null && !isNaN(Number(limitParam))) {
+      limitNum = Math.max(1, Number(limitParam));
+      if (pageParam !== null && !isNaN(Number(pageParam))) {
+        const pageNum = Math.max(1, Number(pageParam));
+        offsetNum = (pageNum - 1) * limitNum;
+      } else if (offsetParam !== null && !isNaN(Number(offsetParam))) {
+        offsetNum = Math.max(0, Number(offsetParam));
+      }
+
+      params.push(limitNum);
+      paginationClause += ` LIMIT $${params.length}`;
+
+      if (offsetNum !== null) {
+        params.push(offsetNum);
+        paginationClause += ` OFFSET $${params.length}`;
+      }
     }
 
     const query = `
       SELECT 
         review_id,
-        full_name,
-        review_text,
-        email,
-        "is_Active",
-        is_deleted,
-        "createdAt",
-        "updatedAt",
-        "deletedAt",
         "visitorId",
+        full_name,
+        email,
+        rating,
+        review_text,
         images,
         "isVisible",
         "visibilityUpdatedBy",
         "visibilityUpdatedAt",
-        "deletedBy"
+        "deletedBy",
+        "is_Active",
+        is_deleted,
+        "createdAt",
+        "updatedAt",
+        "deletedAt"
       FROM public.alumni_reviews 
       WHERE ${conditions.join(" AND ")}
       ${orderByClause}
+      ${paginationClause}
     `;
 
     const result = await client.query(query, params);
     client.release();
 
     return NextResponse.json(
-      { success: true, reviews: result.rows, stats },
+      {
+        success: true,
+        reviews: result.rows,
+        total: totalCount,
+        stats,
+        page: pageParam ? Number(pageParam) : 1,
+        pageSize: limitNum || result.rows.length,
+        hasMore: offsetNum !== null && limitNum !== null ? offsetNum + result.rows.length < totalCount : false,
+      },
       {
         headers: {
           "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
@@ -211,13 +349,18 @@ export async function GET(request: Request) {
   }
 }
 
+/**
+ * POST: Create a new alumni review record
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
+      review_id,
       full_name,
       review_text,
       email,
+      rating = 5,
       images = [],
       visitorId,
     } = body;
@@ -236,18 +379,21 @@ export async function POST(request: Request) {
       );
     }
 
+    const numericRating = Math.min(5, Math.max(1, Number(rating) || 5));
+    const targetReviewId = review_id || randomUUID();
+
     // Extract IP address from request headers
     const forwardedFor = request.headers.get("x-forwarded-for");
     const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : (request.headers.get("x-real-ip") || null);
-
-    const reviewId = randomUUID();
 
     // Process any uploaded base64 photos and upload to Supabase Storage
     const processedImages: string[] = [];
     if (Array.isArray(images) && images.length > 0) {
       for (let i = 0; i < images.length; i++) {
-        const url = await uploadBase64Image(images[i], reviewId, i);
-        processedImages.push(url);
+        const url = await uploadBase64Image(images[i], targetReviewId, i);
+        if (url && typeof url === "string") {
+          processedImages.push(url);
+        }
       }
     }
 
@@ -259,29 +405,33 @@ export async function POST(request: Request) {
     const query = `
       INSERT INTO public.alumni_reviews (
         review_id,
-        full_name,
-        review_text,
-        email,
-        "is_Active",
-        is_deleted,
-        "createdAt",
-        "updatedAt",
         "visitorId",
+        full_name,
+        email,
+        rating,
+        review_text,
         images,
         "isVisible",
         "visibilityUpdatedBy",
         "visibilityUpdatedAt",
-        "deletedBy"
-      ) VALUES ($1, $2, $3, $4, true, false, NOW(), NOW(), $5, $6::jsonb, true, null, null, null)
-      RETURNING *;
+        "deletedBy",
+        "is_Active",
+        is_deleted,
+        "createdAt",
+        "updatedAt",
+        "deletedAt"
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7::jsonb, true, null, null, null, true, false, NOW(), NOW(), null
+      ) RETURNING *;
     `;
 
     const params = [
-      reviewId,
-      full_name.trim(),
+      targetReviewId,
+      resolvedVisitorId ? resolvedVisitorId.substring(0, 36) : null,
+      full_name.trim().substring(0, 100),
+      email ? email.trim().toLowerCase().substring(0, 150) : null,
+      numericRating,
       review_text.trim(),
-      email ? email.trim() : null,
-      resolvedVisitorId,
       JSON.stringify(processedImages),
     ];
 
@@ -306,12 +456,23 @@ export async function POST(request: Request) {
 }
 
 /**
- * PATCH: Admin update for visibility (isVisible, visibilityUpdatedBy) or soft delete (deletedBy)
+ * PATCH: Dynamic update for visibility, soft delete, rating, or review content
  */
 export async function PATCH(request: Request) {
   try {
     const body = await request.json();
-    const { review_id, isVisible, is_deleted, authUserId } = body;
+    const {
+      review_id,
+      isVisible,
+      is_deleted,
+      is_Active,
+      rating,
+      full_name,
+      email,
+      review_text,
+      images,
+      authUserId,
+    } = body;
 
     if (!review_id) {
       return NextResponse.json(
@@ -334,40 +495,86 @@ export async function PATCH(request: Request) {
       }
     }
 
-    let result;
+    const updateClauses: string[] = ['"updatedAt" = NOW()'];
+    const updateParams: any[] = [];
+
+    // Soft delete handling
     if (typeof is_deleted === "boolean" && is_deleted) {
-      // Soft-delete review
-      result = await client.query(
-        `UPDATE public.alumni_reviews
-         SET is_deleted = true,
-             "is_Active" = false,
-             "deletedBy" = $1,
-             "deletedAt" = NOW(),
-             "updatedAt" = NOW()
-         WHERE review_id = $2
-         RETURNING *`,
-        [validAuthUserId, review_id]
-      );
-    } else if (typeof isVisible === "boolean") {
-      // Update visibility
-      result = await client.query(
-        `UPDATE public.alumni_reviews
-         SET "isVisible" = $1,
-             "visibilityUpdatedBy" = $2,
-             "visibilityUpdatedAt" = NOW(),
-             "updatedAt" = NOW()
-         WHERE review_id = $3
-         RETURNING *`,
-        [isVisible, validAuthUserId, review_id]
-      );
-    } else {
+      updateClauses.push("is_deleted = true");
+      updateClauses.push('"is_Active" = false');
+      updateParams.push(validAuthUserId);
+      updateClauses.push(`"deletedBy" = $${updateParams.length}`);
+      updateClauses.push('"deletedAt" = NOW()');
+    } else if (typeof is_deleted === "boolean" && !is_deleted) {
+      updateClauses.push("is_deleted = false");
+      updateClauses.push('"deletedAt" = null');
+    }
+
+    // Visibility toggle handling
+    if (typeof isVisible === "boolean") {
+      updateParams.push(isVisible);
+      updateClauses.push(`"isVisible" = $${updateParams.length}`);
+      updateParams.push(validAuthUserId);
+      updateClauses.push(`"visibilityUpdatedBy" = $${updateParams.length}`);
+      updateClauses.push('"visibilityUpdatedAt" = NOW()');
+    }
+
+    // Active toggle
+    if (typeof is_Active === "boolean") {
+      updateParams.push(is_Active);
+      updateClauses.push(`"is_Active" = $${updateParams.length}`);
+    }
+
+    // Rating update
+    if (rating !== undefined && rating !== null) {
+      const numRating = Math.min(5, Math.max(1, Number(rating) || 5));
+      updateParams.push(numRating);
+      updateClauses.push(`rating = $${updateParams.length}`);
+    }
+
+    // Full name update
+    if (typeof full_name === "string" && full_name.trim()) {
+      updateParams.push(full_name.trim().substring(0, 100));
+      updateClauses.push(`full_name = $${updateParams.length}`);
+    }
+
+    // Email update
+    if (typeof email === "string") {
+      updateParams.push(email.trim().toLowerCase().substring(0, 150));
+      updateClauses.push(`email = $${updateParams.length}`);
+    }
+
+    // Review text update
+    if (typeof review_text === "string" && review_text.trim()) {
+      updateParams.push(review_text.trim());
+      updateClauses.push(`review_text = $${updateParams.length}`);
+    }
+
+    // Images update
+    if (Array.isArray(images)) {
+      updateParams.push(JSON.stringify(images));
+      updateClauses.push(`images = $${updateParams.length}::jsonb`);
+    }
+
+    if (updateClauses.length === 1) {
       client.release();
       return NextResponse.json(
-        { success: false, message: "No valid update field provided (isVisible or is_deleted)" },
+        { success: false, message: "No fields provided to update" },
         { status: 400 }
       );
     }
 
+    updateParams.push(review_id);
+    const targetIdx = updateParams.length;
+
+    const query = `
+      UPDATE public.alumni_reviews
+      SET ${updateClauses.join(", ")}
+      WHERE review_id = $${targetIdx}
+      RETURNING *;
+    `;
+
+    const result = await client.query(query, updateParams);
     client.release();
 
     if (result.rows.length === 0) {

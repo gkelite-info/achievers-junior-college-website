@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   CheckCircle,
   CalendarBlank,
+  Star,
 } from "@phosphor-icons/react";
 import toast from "react-hot-toast";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -21,6 +22,7 @@ import {
   submitAlumniReview,
 } from "@/lib/helpers/alumniReviewsAPI";
 import { getOrCreateVisitorId } from "@/lib/helpers/analyticsClient";
+import ReviewDetailModal from "./ReviewDetailModal";
 
 function cleanReviewText(text: string): string {
   if (!text) return "";
@@ -55,6 +57,93 @@ function formatReviewText(str: string): string {
   return str.replace(/(^|[\s\n\r])([a-z])/gi, (match) => match.toUpperCase());
 }
 
+/**
+ * Automatically optimizes and compresses large image files client-side before upload
+ */
+async function optimizeImageFile(
+  file: File,
+  maxDimension = 2048,
+  quality = 0.88
+): Promise<{ file: File; dataUrl: string }> {
+  // If image is already smaller than 2MB, read and return directly
+  if (file.size <= 2 * 1024 * 1024) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ file, dataUrl: reader.result as string });
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = document.createElement("img");
+      img.onload = () => {
+        let { width, height } = img;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // For very large PNGs, convert to JPEG for high-performance upload
+          const outputType =
+            file.type === "image/png" && file.size > 3 * 1024 * 1024
+              ? "image/jpeg"
+              : file.type || "image/jpeg";
+          const dataUrl = canvas.toDataURL(outputType, quality);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                const extension = outputType === "image/jpeg" ? ".jpg" : ".png";
+                const newName = file.name.replace(/\.[^.]+$/, "") + extension;
+                const optimizedFile = new File([blob], newName, {
+                  type: outputType,
+                  lastModified: Date.now(),
+                });
+                resolve({ file: optimizedFile, dataUrl });
+              } else {
+                resolve({ file, dataUrl });
+              }
+            },
+            outputType,
+            quality
+          );
+        } else {
+          resolve({ file, dataUrl: e.target?.result as string });
+        }
+      };
+
+      img.onerror = () => {
+        resolve({ file, dataUrl: e.target?.result as string });
+      };
+
+      img.src = e.target?.result as string;
+    };
+
+    reader.onerror = () => {
+      resolve({ file, dataUrl: "" });
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Testimonials() {
   const router = useRouter();
   const pathname = usePathname();
@@ -63,12 +152,14 @@ export default function Testimonials() {
   const isUploadOpen = searchParams.get("modal") === "upload";
 
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [selectedReview, setSelectedReview] = useState<ReviewItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [rating, setRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
@@ -126,6 +217,7 @@ export default function Testimonials() {
                   .substring(0, 2)
                   .toUpperCase(),
                 text: r.review_text,
+                rating: Math.min(5, Math.max(1, Number(r.rating) || 5)),
                 date: r.createdAt
                   ? new Date(r.createdAt).toLocaleDateString("en-US", {
                       month: "short",
@@ -240,30 +332,63 @@ export default function Testimonials() {
     else sessionStorage.removeItem('achievers_upload_review');
   }, [reviewText]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const validFiles: File[] = [];
-    Array.from(files).forEach((file) => {
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please upload only image files");
-        return;
-      }
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error(`${file.name} exceeds 5MB size limit`);
-        return;
-      }
-      validFiles.push(file);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setPhotos((prev) => [...prev, event.target!.result as string]);
+    const filesArray = Array.from(files);
+    const MAX_SIZE = 30 * 1024 * 1024; // 30MB limit
+
+    const newOptimizedFiles: File[] = [];
+    const newOptimizedUrls: string[] = [];
+
+    const needsOptimization = filesArray.some((f) => f.size > 2 * 1024 * 1024);
+    const loadingToastId = needsOptimization
+      ? toast.loading("Optimizing photos for upload...")
+      : null;
+
+    try {
+      for (const file of filesArray) {
+        if (!file.type.startsWith("image/")) {
+          toast.error(`${file.name} is not an image file`);
+          continue;
         }
-      };
-      reader.readAsDataURL(file);
-    });
-    setImageFiles((prev) => [...prev, ...validFiles]);
+
+        if (file.size > MAX_SIZE) {
+          toast.error(`${file.name} exceeds 30MB size limit`);
+          continue;
+        }
+
+        try {
+          const { file: optimizedFile, dataUrl } = await optimizeImageFile(file);
+          newOptimizedFiles.push(optimizedFile);
+          if (dataUrl) {
+            newOptimizedUrls.push(dataUrl);
+          }
+        } catch {
+          newOptimizedFiles.push(file);
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.result) {
+              setPhotos((prev) => [...prev, event.target!.result as string]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      if (newOptimizedUrls.length > 0) {
+        setPhotos((prev) => [...prev, ...newOptimizedUrls]);
+      }
+      if (newOptimizedFiles.length > 0) {
+        setImageFiles((prev) => [...prev, ...newOptimizedFiles]);
+      }
+    } finally {
+      if (loadingToastId) {
+        toast.dismiss(loadingToastId);
+      }
+      e.target.value = "";
+    }
   };
 
   const handleOpenModal = () => {
@@ -353,6 +478,7 @@ export default function Testimonials() {
         full_name: cleanName,
         review_text: cleanReview,
         email: finalEmail,
+        rating: Number(rating),
         images: uploadedPhotoUrls,
         visitorId,
       });
@@ -373,6 +499,7 @@ export default function Testimonials() {
         name: savedReview.full_name || name.trim(),
         date: formattedDate,
         text: savedReview.review_text || reviewText.trim(),
+        rating: savedReview.rating || rating,
         isVisible: true,
         photos: uploadedPhotoUrls,
       };
@@ -394,6 +521,7 @@ export default function Testimonials() {
       // Reset Form
       setName("");
       setEmail("");
+      setRating(5);
       setReviewText("");
       setPhotos([]);
       setImageFiles([]);
@@ -479,100 +607,112 @@ export default function Testimonials() {
               const hasPhotos = person.photos && person.photos.length > 0;
 
               return (
-                <figure
+                <div
                   key={person.id}
-                  className="flex flex-col justify-between h-[330px] min-h-[330px] max-h-[330px] w-full rounded-2xl border border-gray-100 bg-white p-4 shadow-[0px_4px_20px_rgba(10,30,55,0.05)] hover:shadow-[0px_8px_30px_rgba(10,30,55,0.09)] transition-all duration-300 overflow-hidden box-border"
+                  className="rounded-2xl border border-gray-100 bg-white p-5 flex flex-col justify-between shadow-[0px_4px_20px_rgba(10,30,55,0.05)] hover:shadow-[0px_8px_30px_rgba(10,30,55,0.09)] hover:border-[#FF8117]/40 transition-all duration-300 group box-border"
                 >
-                  {/* Top Profile: Fixed at top */}
-                  <div className="flex items-center gap-2.5 shrink-0 mb-2 pb-2 border-b border-gray-50">
-                    <div
-                      aria-hidden="true"
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full border-2 border-[#FFC65B] bg-[#081D36] text-[11px] font-bold text-white shadow-xs"
-                    >
-                      {person.initials ||
-                        person.name
-                          .split(" ")
-                          .map((part) => part[0])
-                          .join("")
-                          .substring(0, 2)
-                          .toUpperCase()}
-                    </div>
-                    <span className="font-bold text-[#0A1E37] text-sm leading-snug truncate">
-                      {person.name}
-                    </span>
-                  </div>
+                  <div>
+                    {/* Top Profile: Initials avatar + Name + Role + Rating Stars */}
+                    <div className="flex items-center justify-between gap-3 mb-3.5 pb-2.5 border-b border-gray-50">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          aria-hidden="true"
+                          className="flex size-9 sm:size-10 shrink-0 items-center justify-center rounded-full border-2 border-[#FFC65B] bg-[#081D36] text-[11px] sm:text-xs font-bold text-white shadow-xs"
+                        >
+                          {person.initials ||
+                            person.name
+                              .split(" ")
+                              .map((part) => part[0])
+                              .join("")
+                              .substring(0, 2)
+                              .toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-[#0A1E37] text-sm leading-snug truncate group-hover:text-[#FF8117] transition-colors">
+                            {person.name}
+                          </h3>
+                          <p className="text-[11px] text-[#63799A] truncate">
+                            {person.role || "Achievers Alumnus"}
+                          </p>
+                        </div>
+                      </div>
 
-                  {/* Middle Content: Separate scroll for text and separate scroll for images */}
-                  <div className="flex-1 flex flex-col justify-between min-h-0 overflow-hidden">
-                    {/* Review Quote Text with dedicated vertical scrollbar (no horizontal overflow, no awkward gaps) */}
-                    <div className={`overflow-y-auto overflow-x-hidden pr-1 review-scroll ${hasPhotos ? "max-h-[85px]" : "flex-1 max-h-[200px]"}`}>
-                      <blockquote className="text-[13px] leading-snug text-[#464555] break-words [overflow-wrap:anywhere]">
-                        <span
-                          aria-hidden="true"
-                          className="inline-block text-base leading-none text-[#FF8117] font-serif font-bold mr-1 align-baseline select-none"
-                        >
-                          &ldquo;
-                        </span>
-                        <span className="break-words [overflow-wrap:anywhere]">{cleanReviewText(person.text)}</span>
-                        <span
-                          aria-hidden="true"
-                          className="inline-block text-base leading-none text-[#FF8117] font-serif font-bold ml-1 align-baseline select-none"
-                        >
-                          &rdquo;
-                        </span>
-                      </blockquote>
+                      {/* Star Rating */}
+                      <div
+                        className="flex items-center gap-0.5 text-amber-400 shrink-0"
+                        title={`${person.rating || 5} out of 5 stars`}
+                      >
+                        {Array.from({ length: Math.min(5, Math.max(1, person.rating || 5)) }).map((_, i) => (
+                          <Star key={i} size={15} weight="fill" />
+                        ))}
+                      </div>
                     </div>
 
-                    {/* Images Uploaded With Review with dedicated scrollbar */}
+                    {/* Middle Content: Review text with View More link */}
+                    <div className="relative mb-3.5">
+                      <p className="text-xs sm:text-[13px] text-[#464555] leading-relaxed line-clamp-3 break-words [overflow-wrap:anywhere]">
+                        &ldquo;{cleanReviewText(person.text)}&rdquo;
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedReview(person)}
+                        className="text-xs font-bold text-[#FF8117] hover:text-[#e06f0e] hover:underline transition-colors mt-1.5 inline-flex items-center gap-1 cursor-pointer"
+                      >
+                        View More &rarr;
+                      </button>
+                    </div>
+
+                    {/* Attached Photos Thumbnail Grid */}
                     {hasPhotos && (
-                      <div className="mt-2 pt-1.5 border-t border-gray-100 shrink-0">
-                        <p className="text-[10px] font-bold text-[#63799A] uppercase tracking-wider mb-1 flex items-center justify-between">
-                          <span className="flex items-center gap-1">
-                            <ImageIcon size={12} />
+                      <div className="mb-3.5">
+                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-[#63799A] mb-2">
+                          <span className="flex items-center gap-1.5 text-[#FF8117]">
+                            <ImageIcon size={13} weight="bold" />
                             <span>Attached Photos ({person.photos.length})</span>
                           </span>
-                          {person.photos.length > 2 && (
-                            <span className="text-[9px] text-[#8A9EB5] font-normal">
-                              Scroll to view all
-                            </span>
-                          )}
-                        </p>
-                        <div className="h-[95px] max-h-[95px] overflow-y-auto pr-1 review-scroll">
-                          <div className="grid grid-cols-2 gap-1.5">
-                            {person.photos.map((photo, pIndex) => (
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2 w-full">
+                          {person.photos.slice(0, 3).map((photo, pIdx) => {
+                            const maxVisiblePhotos = 3;
+                            const isLastSlot = pIdx === maxVisiblePhotos - 1;
+                            const remainingCount = person.photos.length - maxVisiblePhotos;
+                            const showRemainingBadge = isLastSlot && remainingCount > 0;
+
+                            return (
                               <div
-                                key={pIndex}
-                                onClick={() => setSelectedPhoto(photo)}
-                                className="group relative aspect-[4/3] w-full rounded-lg overflow-hidden border border-gray-200 bg-gray-50 cursor-pointer shadow-xs hover:border-[#FF8117] transition-all"
+                                key={pIdx}
+                                onClick={() => setSelectedReview(person)}
+                                className="relative h-18 sm:h-20 rounded-xl overflow-hidden border border-gray-200 hover:border-[#FF8117] cursor-pointer group/photo transition-all bg-gray-50 shadow-2xs"
                               >
                                 <Image
                                   src={photo}
-                                  alt={`${person.name} photo attachment ${pIndex + 1}`}
+                                  alt={`${person.name} media ${pIdx + 1}`}
                                   fill
-                                  sizes="(max-width: 768px) 50vw, 160px"
-                                  className="object-cover group-hover:scale-105 transition-transform duration-300"
+                                  sizes="(max-width: 768px) 33vw, 120px"
+                                  className="object-cover group-hover/photo:scale-105 transition-transform duration-300"
                                 />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
-                                  <span className="opacity-0 group-hover:opacity-100 text-white text-[9px] font-semibold bg-black/60 px-1.5 py-0.5 rounded transition-opacity">
-                                    View
-                                  </span>
-                                </div>
+                                {showRemainingBadge && (
+                                  <div className="absolute inset-0 bg-black/75 backdrop-blur-2xs flex items-center justify-center transition-colors group-hover/photo:bg-black/60">
+                                    <span className="text-white font-black text-xs tracking-wide">
+                                      +{remainingCount}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            ))}
-                          </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* Footer with Date: Fixed at bottom */}
-                  <div className="mt-2 pt-1.5 border-t border-gray-50 flex items-center text-[11px] text-[#63799A] shrink-0">
-                    <span className="flex items-center gap-1.5">
-                      <CalendarBlank size={13} />
-                      {person.date}
-                    </span>
+                  {/* Footer with Date */}
+                  <div className="pt-2.5 border-t border-gray-100 flex items-center gap-1.5 text-[11px] text-[#63799A] shrink-0">
+                    <CalendarBlank size={13} />
+                    <span>{person.date}</span>
                   </div>
-                </figure>
+                </div>
               );
             })}
           </div>
@@ -656,6 +796,27 @@ export default function Testimonials() {
                     />
                   </div>
 
+                  {/* Rating Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#0A1E37] uppercase tracking-wider mb-1.5">
+                      Rating <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-1.5 h-11 px-3.5 rounded-xl bg-gray-50 border border-gray-200">
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <button
+                          key={star}
+                          type="button"
+                          onClick={() => setRating(star)}
+                          className="cursor-pointer text-amber-400 hover:scale-110 transition-transform"
+                          aria-label={`Rate ${star} star${star > 1 ? "s" : ""}`}
+                        >
+                          <Star size={20} weight={star <= rating ? "fill" : "regular"} />
+                        </button>
+                      ))}
+                      <span className="text-xs font-bold text-gray-700 ml-2">{rating}/5</span>
+                    </div>
+                  </div>
+
                   {/* Review Text */}
                   <div>
                     <label className="block text-xs font-bold text-[#0A1E37] uppercase tracking-wider mb-1.5">
@@ -690,7 +851,7 @@ export default function Testimonials() {
                         Click to select or drag and drop photos
                       </span>
                       <span className="text-[10px] text-gray-400 mt-0.5">
-                        PNG, JPG, WEBP up to 5MB (no limit on count)
+                        PNG, JPG, WEBP up to 30MB (automatically optimized)
                       </span>
                       <input
                         type="file"
@@ -816,6 +977,12 @@ export default function Testimonials() {
           </div>
         </Dialog>
       </Transition>
+
+      {/* Review Detail Modal */}
+      <ReviewDetailModal
+        review={selectedReview}
+        onClose={() => setSelectedReview(null)}
+      />
     </section>
   );
 }
